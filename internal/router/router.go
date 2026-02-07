@@ -2,21 +2,29 @@
 package router
 
 import (
+	"net/http"
+
 	"myapi/internal/handler"
 
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-func Setup() *gin.Engine {
-	r := gin.Default()
+func Setup() http.Handler {
+	r := chi.NewRouter()
 
-	r.GET("/health", handler.Health)
+	// middleware（gin.Default() 相当）
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
 
-	v1 := r.Group("/v1")
-	{
-		v1.GET("/users/:id", handler.GetUser)
-		v1.POST("/users", handler.CreateUser)
-	}
+	// health check
+	r.Get("/health", handler.Health)
+
+	// v1 group
+	r.Route("/v1", func(r chi.Router) {
+		r.Get("/users/{id}", handler.GetUser)
+		r.Post("/users", handler.CreateUser)
+	})
 
 	return r
 }

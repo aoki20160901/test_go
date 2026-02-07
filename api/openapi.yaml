@@ -1,0 +1,119 @@
+openapi: 3.0.3
+
+info:
+  title: MyAPI
+  description: User management API
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /v1/users/{id}:
+    get:
+      summary: Get user by ID
+      operationId: getUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/users:
+    post:
+      summary: Create user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreate"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "123"
+        name:
+          type: string
+          example: "Taro"
+        email:
+          type: string
+          example: "taro@example.com"
+      required:
+        - id
+        - name
+
+    UserCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Taro"
+        email:
+          type: string
+          example: "taro@example.com"
+      required:
+        - name
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "not found"
+      required:
+        - error
