@@ -16,6 +16,11 @@ func dsnFromEnv() string {
 }
 
 func TestPostgresCRUD(t *testing.T) {
+
+	if os.Getenv("RUN_INTEGRATION_TEST") == "" {
+		t.Skip("skip integration test")
+	}
+
 	dsn := dsnFromEnv()
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {

@@ -1,27 +1,33 @@
-// internal/handler/user_handler.go
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
+	"encoding/json"
 	"myapi/internal/model"
 	"myapi/internal/service"
-
-	"github.com/go-chi/chi/v5"
 )
 
-func GetUser(w http.ResponseWriter, r *http.Request) {
-	// パスパラメータ取得
+type UserHandler struct {
+	userService *service.UserService
+}
+
+func NewUserHandler(
+	userService *service.UserService,
+) *UserHandler {
+	return &UserHandler{
+		userService: userService,
+	}
+}
+
+func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	user, err := service.GetUser(r.Context(), id)
+	user, err := h.userService.GetUser(r.Context(), id)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{
-			"error": err.Error(),
-		})
+		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
@@ -30,40 +36,24 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-// CreateUser handles POST /v1/users
-func CreateUser(w http.ResponseWriter, r *http.Request) {
-	var u model.User
+func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name string `json:"name"`
+	}
 
-	// JSON body をデコード（ShouldBindJSON の代替）
-	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
-			"error": "invalid json body",
-		})
+	if err := DecodeJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	created, err := service.CreateUser(r.Context(), &u)
+	user, err := h.userService.CreateUser(
+		r.Context(),
+		&model.User{Name: req.Name},
+	)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{
-			"error": err.Error(),
-		})
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(created)
-}
-
-// Health returns a simple health check
-func Health(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "ok",
-	})
+	RespondJSON(w, http.StatusCreated, user)
 }

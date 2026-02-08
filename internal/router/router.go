@@ -1,29 +1,24 @@
-// internal/router/router.go
 package router
 
 import (
 	"net/http"
 
-	"myapi/internal/handler"
-
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+
+	"myapi/internal/handler"
+	"myapi/internal/service"
 )
 
-func Setup() http.Handler {
+func Setup(userService *service.UserService) http.Handler {
 	r := chi.NewRouter()
 
-	// middleware（gin.Default() 相当）
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-
-	// health check
 	r.Get("/health", handler.Health)
 
-	// v1 group
 	r.Route("/v1", func(r chi.Router) {
-		r.Get("/users/{id}", handler.GetUser)
-		r.Post("/users", handler.CreateUser)
+		h := handler.NewUserHandler(userService)
+
+		r.Get("/users/{id}", h.GetUser)
+		r.Post("/users", h.CreateUser)
 	})
 
 	return r

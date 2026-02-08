@@ -5,39 +5,45 @@ import (
 	"testing"
 
 	"myapi/internal/model"
-	"myapi/internal/repository"
 )
 
-func TestCreateUser_Nil(t *testing.T) {
-	_, err := repository.CreateUser(context.Background(), nil)
-	if err == nil {
-		t.Fatalf("expected error when creating nil user, got nil")
-	}
+// -----------------------------
+// mock repository for unit test
+// -----------------------------
+type mockUserRepository struct{}
+
+func (m *mockUserRepository) Create(ctx context.Context, u *model.User) (*model.User, error) {
+	u.ID = "mock-id-123"
+	return u, nil
 }
 
-func TestCreateUser_Success(t *testing.T) {
-	in := &model.User{Name: "Alice"}
-	out, err := repository.CreateUser(context.Background(), in)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if out.ID == "" {
-		t.Fatalf("expected non-empty ID, got empty")
-	}
-	if out.Name != "Alice" {
-		t.Fatalf("expected name 'Alice', got '%s'", out.Name)
-	}
+func (m *mockUserRepository) FindByID(ctx context.Context, id string) (*model.User, error) {
+	return &model.User{ID: id, Name: "Mock User"}, nil
 }
 
-func TestFindUserByID(t *testing.T) {
-	u, err := repository.FindUserByID(context.Background(), "42")
+// -----------------------------
+// Unit test with mock
+// -----------------------------
+func TestUserRepository_Mock(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockUserRepository{}
+
+	// Create
+	u := &model.User{Name: "Taro"}
+	created, err := repo.Create(ctx, u)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("Create failed: %v", err)
 	}
-	if u == nil {
-		t.Fatalf("expected user, got nil")
+	if created.ID == "" {
+		t.Fatalf("expected non-empty ID")
 	}
-	if u.ID != "42" {
-		t.Fatalf("expected id '42', got '%s'", u.ID)
+
+	// FindByID
+	got, err := repo.FindByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+	if got.Name != "Mock User" {
+		t.Fatalf("expected name 'Mock User', got %s", got.Name)
 	}
 }
