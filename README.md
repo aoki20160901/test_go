@@ -8,4 +8,4 @@ go mod tidy
 go run ./cmd/server
 
 ### postgreとMSSQLはdocker
-docker compose up
+docker compose up db
