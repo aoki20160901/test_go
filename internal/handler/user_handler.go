@@ -2,44 +2,68 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"myapi/internal/model"
 	"myapi/internal/service"
 
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
 )
 
-func GetUser(c *gin.Context) {
-	id := c.Param("id")
+func GetUser(w http.ResponseWriter, r *http.Request) {
+	// パスパラメータ取得
+	id := chi.URLParam(r, "id")
 
-	user, err := service.GetUser(c.Request.Context(), id)
+	user, err := service.GetUser(r.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": err.Error(),
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, user)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(user)
 }
 
 // CreateUser handles POST /v1/users
-func CreateUser(c *gin.Context) {
+func CreateUser(w http.ResponseWriter, r *http.Request) {
 	var u model.User
-	if err := c.ShouldBindJSON(&u); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+	// JSON body をデコード（ShouldBindJSON の代替）
+	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "invalid json body",
+		})
 		return
 	}
 
-	created, err := service.CreateUser(c.Request.Context(), &u)
+	created, err := service.CreateUser(r.Context(), &u)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": err.Error(),
+		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, created)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(created)
 }
 
 // Health returns a simple health check
-func Health(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+func Health(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "ok",
+	})
 }

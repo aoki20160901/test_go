@@ -1,10 +1,13 @@
 package main
 
 import (
+	"net/http"
+
 	"myapi/internal/router"
 )
 
 func main() {
 	r := router.Setup()
-	r.Run(":8080")
+
+	http.ListenAndServe(":8080", r)
 }
