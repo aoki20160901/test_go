@@ -9,3 +9,6 @@ go run ./cmd/server
 
 ### postgreとMSSQLはdocker
 docker compose up
+
+### test
+go test ./...
