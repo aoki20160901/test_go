@@ -6,6 +6,7 @@ import (
 	"myapi/internal/router"
 )
 
+// main関数
 func main() {
 	r := router.Setup()
 
