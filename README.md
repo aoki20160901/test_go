@@ -9,3 +9,6 @@ go run ./cmd/server
 
 ### postgreとMSSQLはdocker
 docker compose up db
+
+### llm 対応
+ANTHROPIC_API_KEY=dummy go run ./cmd/poc_test
