@@ -73,7 +73,10 @@ func (c *OpusClient) RefineText(ctx context.Context, input string) (string, erro
 	req.Header.Set("x-api-key", c.apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
+	fmt.Println("LLM CALL START")
 	resp, err := c.client.Do(req)
+	fmt.Println("LLM CALL END")
+
 	if err != nil {
 		return "", err
 	}
