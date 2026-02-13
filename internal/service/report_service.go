@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"myapi/internal/llm"
@@ -32,5 +33,16 @@ func (s *reportService) GenerateReport(
 	text string,
 	image io.Reader,
 ) ([]byte, error) {
-	return []byte("ok"), nil
+
+	fmt.Println("SERVICE CALLED")
+
+	refined, err := s.llm.RefineText(ctx, text)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("REFINED:", refined)
+
+	// 今は仮でそのまま返す
+	return []byte(refined), nil
 }
