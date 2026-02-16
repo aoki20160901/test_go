@@ -1,56 +1,115 @@
 package handler
 
 import (
+	"context"
 	"io"
-	"myapi/internal/service"
-	"myapi/pkg/logger"
 	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 )
 
-type ReportHandler struct {
-	service service.ReportService
+type ReportService interface {
+	GenerateCaption(ctx context.Context, text string) (string, error)
+	GeneratePDF(ctx context.Context, imagePaths []string, captions []string) ([]byte, error)
 }
 
-func NewReportHandler(s service.ReportService) *ReportHandler {
+type ReportHandler struct {
+	service ReportService
+}
+
+func NewReportHandler(s ReportService) *ReportHandler {
 	return &ReportHandler{service: s}
 }
 
-func (h *ReportHandler) Generate(w http.ResponseWriter, r *http.Request) {
+func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	logger.Info("レポート生成開始")
-
-	// multipart解析
-	err := r.ParseMultipartForm(10 << 20) // 10MB
+	// 最大20MB
+	err := r.ParseMultipartForm(20 << 20)
 	if err != nil {
-		logger.Error("multipart解析エラー", "error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid multipart form", http.StatusBadRequest)
 		return
 	}
-	logger.Info("multipart解析成功")
 
-	text := r.FormValue("text")
-	logger.Info("テキスト取得", "text_length", len(text))
+	texts := r.MultipartForm.Value["text"]
+	files := r.MultipartForm.File["image"]
 
-	file, _, err := r.FormFile("image")
-	if err != nil {
-		logger.Error("画像ファイル取得エラー", "error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if len(texts) == 0 || len(files) == 0 {
+		http.Error(w, "textとimageは必須です", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
-	logger.Info("画像ファイル取得成功")
 
-	// io.Reader に渡す
-	pdfBytes, err := h.service.GenerateReport(ctx, text, file.(io.Reader))
-	if err != nil {
-		logger.Error("レポート生成エラー", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if len(texts) != len(files) {
+		http.Error(w, "textとimageの数が一致しません", http.StatusBadRequest)
 		return
 	}
-	logger.Info("レポート生成成功", "pdf_size", len(pdfBytes))
 
+	// アップロード保存先
+	uploadDir := "./uploads"
+	os.MkdirAll(uploadDir, os.ModePerm)
+
+	var imagePaths []string
+	var captions []string
+
+	for i, fileHeader := range files {
+
+		// =====================
+		// ① 画像保存
+		// =====================
+		src, err := fileHeader.Open()
+		if err != nil {
+			http.Error(w, "file open error", http.StatusInternalServerError)
+			return
+		}
+
+		filename := time.Now().Format("20060102150405") + "_" + fileHeader.Filename
+		savePath := filepath.Join(uploadDir, filename)
+
+		dst, err := os.Create(savePath)
+		if err != nil {
+			src.Close()
+			http.Error(w, "file save error", http.StatusInternalServerError)
+			return
+		}
+
+		_, err = io.Copy(dst, src)
+		src.Close()
+		dst.Close()
+
+		if err != nil {
+			http.Error(w, "file copy error", http.StatusInternalServerError)
+			return
+		}
+
+		imagePaths = append(imagePaths, savePath)
+
+		// =====================
+		// ② LLM説明生成（Visionなし）
+		// =====================
+		caption, err := h.service.GenerateCaption(ctx, texts[i])
+		if err != nil {
+			http.Error(w, "LLM error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		captions = append(captions, caption)
+	}
+
+	// =====================
+	// ③ PDF生成
+	// =====================
+	pdfBytes, err := h.service.GeneratePDF(ctx, imagePaths, captions)
+	if err != nil {
+		http.Error(w, "PDF生成失敗: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// =====================
+	// ④ PDF返却
+	// =====================
 	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", "attachment; filename=report.pdf")
+	w.WriteHeader(http.StatusOK)
 	w.Write(pdfBytes)
-	logger.Info("レポート生成完了")
 }
