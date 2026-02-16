@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
+	"errors"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -15,51 +15,38 @@ type OpusClient struct {
 	client *http.Client
 }
 
-func NewOpusClient(apiKey string) *OpusClient {
+func NewOpusClient() *OpusClient {
 	return &OpusClient{
-		apiKey: apiKey,
+		apiKey: os.Getenv("ANTHROPIC_API_KEY"),
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
 	}
 }
 
-type anthropicRequest struct {
-	Model     string    `json:"model"`
-	MaxTokens int       `json:"max_tokens"`
-	Messages  []message `json:"messages"`
-}
+func (c *OpusClient) Generate(ctx context.Context, req Request) (string, error) {
+	if c.apiKey == "" {
+		return "", errors.New("ANTHROPIC_API_KEY is not set")
+	}
 
-type message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type anthropicResponse struct {
-	Content []struct {
-		Text string `json:"text"`
-	} `json:"content"`
-}
-
-func (c *OpusClient) RefineText(ctx context.Context, input string) (string, error) {
-
-	reqBody := anthropicRequest{
-		Model:     "claude-3-opus-20240229",
-		MaxTokens: 500,
-		Messages: []message{
+	body := map[string]any{
+		"model":      "claude-3-opus-20240229",
+		"max_tokens": 512,
+		"system":     req.System,
+		"messages": []map[string]string{
 			{
-				Role:    "user",
-				Content: input,
+				"role":    "user",
+				"content": req.User,
 			},
 		},
 	}
 
-	jsonBody, err := json.Marshal(reqBody)
+	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(
+	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
 		"https://api.anthropic.com/v1/messages",
@@ -69,34 +56,33 @@ func (c *OpusClient) RefineText(ctx context.Context, input string) (string, erro
 		return "", err
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-api-key", c.apiKey)
+	httpReq.Header.Set("anthropic-version", "2023-06-01")
 
-	fmt.Println("LLM CALL START")
-	resp, err := c.client.Do(req)
-	fmt.Println("LLM CALL END")
-
+	resp, err := c.client.Do(httpReq)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-
-	// ❗ ステータスコードチェック（重要）
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("anthropic error: %s\n%s", resp.Status, string(body))
+		return "", errors.New("anthropic error: " + resp.Status)
 	}
 
-	var parsed anthropicResponse
-	if err := json.Unmarshal(body, &parsed); err != nil {
+	var result struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", err
 	}
 
-	if len(parsed.Content) == 0 {
-		return "", fmt.Errorf("empty response from anthropic")
+	if len(result.Content) == 0 {
+		return "", errors.New("empty response from anthropic")
 	}
 
-	return parsed.Content[0].Text, nil
+	return result.Content[0].Text, nil
 }
