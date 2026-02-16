@@ -4,85 +4,107 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
 )
 
 type OpusClient struct {
-	apiKey string
-	client *http.Client
+	BaseURL    string
+	APIKey     string
+	Model      string
+	HTTPClient *http.Client
 }
 
 func NewOpusClient() *OpusClient {
 	return &OpusClient{
-		apiKey: os.Getenv("ANTHROPIC_API_KEY"),
-		client: &http.Client{
+		BaseURL: "https://api.openai.com/v1", // Opus互換エンドポイントに変更可
+		APIKey:  os.Getenv("OPUS_API_KEY"),
+		Model:   "gpt-4o-mini", // 任意モデルに変更
+		HTTPClient: &http.Client{
 			Timeout: 60 * time.Second,
 		},
 	}
 }
 
-func (c *OpusClient) Generate(ctx context.Context, req Request) (string, error) {
-	if c.apiKey == "" {
-		return "", errors.New("ANTHROPIC_API_KEY is not set")
-	}
+type chatRequest struct {
+	Model    string        `json:"model"`
+	Messages []chatMessage `json:"messages"`
+}
 
-	body := map[string]any{
-		"model":      "claude-3-opus-20240229",
-		"max_tokens": 512,
-		"system":     req.System,
-		"messages": []map[string]string{
+type chatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type chatResponse struct {
+	Choices []struct {
+		Message chatMessage `json:"message"`
+	} `json:"choices"`
+}
+
+func (c *OpusClient) GenerateCaption(ctx context.Context, text string) (string, error) {
+
+	prompt := fmt.Sprintf(`
+あなたは社内提出用報告書作成AIです。
+
+以下の工事依頼内容をもとに、
+写真の説明文として100文字以内で生成してください。
+断定調で簡潔に記載してください。
+
+依頼内容:
+%s
+`, text)
+
+	reqBody := chatRequest{
+		Model: c.Model,
+		Messages: []chatMessage{
 			{
-				"role":    "user",
-				"content": req.User,
+				Role:    "user",
+				Content: prompt,
 			},
 		},
 	}
 
-	jsonBody, err := json.Marshal(body)
+	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", err
 	}
 
-	httpReq, err := http.NewRequestWithContext(
+	req, err := http.NewRequestWithContext(
 		ctx,
-		http.MethodPost,
-		"https://api.anthropic.com/v1/messages",
-		bytes.NewBuffer(jsonBody),
+		"POST",
+		c.BaseURL+"/chat/completions",
+		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
 		return "", err
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", c.apiKey)
-	httpReq.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.client.Do(httpReq)
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.New("anthropic error: " + resp.Status)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("LLM error: %s", string(bodyBytes))
 	}
 
-	var result struct {
-		Content []struct {
-			Text string `json:"text"`
-		} `json:"content"`
-	}
-
+	var result chatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", err
 	}
 
-	if len(result.Content) == 0 {
-		return "", errors.New("empty response from anthropic")
+	if len(result.Choices) == 0 {
+		return "", fmt.Errorf("no response from LLM")
 	}
 
-	return result.Content[0].Text, nil
+	return result.Choices[0].Message.Content, nil
 }

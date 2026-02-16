@@ -1,118 +1,100 @@
 package service
 
 import (
+	"bytes"
 	"context"
-	"errors"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
+	"fmt"
+	"time"
 
-	"myapi/internal/llm"
+	"your_project/llm"
+
+	"github.com/jung-kurt/gofpdf"
 )
 
-const systemPrompt = `
-あなたは住宅改修会社の社内報告書作成アシスタントです。
-入力内容を基に、社内提出用の報告書文章を作成してください。
-
-条件：
-・200文字以内
-・簡潔で丁寧な文章
-・主観的表現は禁止
-・箇条書きは禁止
-・一文または二文でまとめる
-・200文字を超える出力は禁止
-・余計な説明は出力しない
-`
-
-type ReportService interface {
-	GenerateReport(ctx context.Context, text string) (string, error)
+type ReportService struct {
+	llm *llm.OpusClient
 }
 
-type reportService struct {
-	llm llm.Client
-}
-
-func NewReportService(llmClient llm.Client) ReportService {
-	return &reportService{
+func NewReportService(llmClient *llm.OpusClient) *ReportService {
+	return &ReportService{
 		llm: llmClient,
 	}
 }
 
-func (s *reportService) GenerateReport(
+func (s *ReportService) GenerateCaption(ctx context.Context, text string) (string, error) {
+	return s.llm.GenerateCaption(ctx, text)
+}
+
+func (s *ReportService) GeneratePDF(
 	ctx context.Context,
-	text string,
-	image io.Reader,
+	imagePaths []string,
+	captions []string,
 ) ([]byte, error) {
 
-	if strings.TrimSpace(text) == "" {
-		return nil, errors.New("input text is empty")
+	if len(imagePaths) != len(captions) {
+		return nil, fmt.Errorf("imageとcaptionの数が一致しません")
 	}
 
-	req := llm.Request{
-		System: systemPrompt,
-		User:   text,
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(20, 20, 20)
+
+	// 日本語フォント（事前にttf配置）
+	pdf.AddUTF8Font("NotoSans", "", "./fonts/NotoSansJP-Regular.ttf")
+	pdf.SetFont("NotoSans", "", 12)
+
+	for i, imagePath := range imagePaths {
+
+		pdf.AddPage()
+
+		// =========================
+		// ① 右上：作成日
+		// =========================
+		pdf.SetXY(140, 15)
+		pdf.CellFormat(50, 10,
+			fmt.Sprintf("作成日: %s", time.Now().Format("2006-01-02")),
+			"", 0, "R", false, 0, "")
+
+		pdf.SetY(30)
+
+		// =========================
+		// ② タイトル
+		// =========================
+		pdf.SetFont("NotoSans", "", 14)
+		pdf.Cell(0, 10, "工事報告書")
+		pdf.Ln(15)
+
+		// =========================
+		// ③ 画像
+		// =========================
+		imageWidth := 150.0
+		x := (210.0 - imageWidth) / 2.0
+
+		pdf.ImageOptions(
+			imagePath,
+			x,
+			pdf.GetY(),
+			imageWidth,
+			0,
+			false,
+			gofpdf.ImageOptions{ImageType: "", ReadDpi: true},
+			0,
+			"",
+		)
+
+		pdf.Ln(95)
+
+		// =========================
+		// ④ キャプション（画像下）
+		// =========================
+		pdf.SetFont("NotoSans", "", 12)
+		pdf.MultiCell(0, 8, captions[i], "", "L", false)
 	}
 
-	result, err := s.llm.Generate(ctx, req)
+	var buf bytes.Buffer
+	err := pdf.Output(&buf)
 	if err != nil {
 		return nil, err
 	}
 
-	result = trimTo200(result)
-
-	tmpDir := os.TempDir()
-	pdfPath := filepath.Join(tmpDir, "report.pdf")
-	imgPath := filepath.Join(tmpDir, "upload.jpg")
-
-	// 画像保存
-	imgFile, err := os.Create(imgPath)
-	if err != nil {
-		return nil, err
-	}
-	defer imgFile.Close()
-
-	_, err = io.Copy(imgFile, image)
-	if err != nil {
-		return nil, err
-	}
-
-	// Python実行
-	cmd := exec.Command(
-		"python3",
-		"generate_pdf.py",
-		pdfPath,
-		result,
-		imgPath,
-	)
-
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-
-	pdfBytes, err := os.ReadFile(pdfPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return pdfBytes, nil
-}
-
-// -------------------------
-// private helper functions
-// -------------------------
-
-func trimTo200(s string) string {
-	r := []rune(s)
-	if len(r) > 200 {
-		return string(r[:200])
-	}
-	return s
-}
-
-func cleanOutput(s string) string {
-	s = strings.TrimSpace(s)
-	s = strings.ReplaceAll(s, "\n", "")
-	return s
+	return buf.Bytes(), nil
 }
