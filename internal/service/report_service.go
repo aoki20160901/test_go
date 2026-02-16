@@ -3,6 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"myapi/internal/llm"
@@ -39,10 +43,11 @@ func NewReportService(llmClient llm.Client) ReportService {
 func (s *reportService) GenerateReport(
 	ctx context.Context,
 	text string,
-) (string, error) {
+	image io.Reader,
+) ([]byte, error) {
 
 	if strings.TrimSpace(text) == "" {
-		return "", errors.New("input text is empty")
+		return nil, errors.New("input text is empty")
 	}
 
 	req := llm.Request{
@@ -52,17 +57,46 @@ func (s *reportService) GenerateReport(
 
 	result, err := s.llm.Generate(ctx, req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	result = cleanOutput(result)
 	result = trimTo200(result)
 
-	if result == "" {
-		return "", errors.New("llm returned empty result")
+	tmpDir := os.TempDir()
+	pdfPath := filepath.Join(tmpDir, "report.pdf")
+	imgPath := filepath.Join(tmpDir, "upload.jpg")
+
+	// 画像保存
+	imgFile, err := os.Create(imgPath)
+	if err != nil {
+		return nil, err
+	}
+	defer imgFile.Close()
+
+	_, err = io.Copy(imgFile, image)
+	if err != nil {
+		return nil, err
 	}
 
-	return result, nil
+	// Python実行
+	cmd := exec.Command(
+		"python3",
+		"generate_pdf.py",
+		pdfPath,
+		result,
+		imgPath,
+	)
+
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+
+	pdfBytes, err := os.ReadFile(pdfPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return pdfBytes, nil
 }
 
 // -------------------------
