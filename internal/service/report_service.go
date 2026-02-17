@@ -37,79 +37,71 @@ func (s *ReportService) GeneratePDF(
 
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(20, 20, 20)
-	pdf.SetAutoPageBreak(true, 20)
+	pdf.SetAutoPageBreak(false, 20)
 
-	// 日本語フォント
+	pdf.AddPage()
+
 	pdf.AddUTF8Font("NotoSans", "", "./fonts/NotoSansJP-Regular.ttf")
 	pdf.SetFont("NotoSans", "", 12)
 
 	pageWidth, pageHeight := 210.0, 297.0
+	leftMargin := 20.0
+	rightMargin := 20.0
 	bottomLimit := pageHeight - 20
 
-	for i, imagePath := range imagePaths {
+	contentWidth := pageWidth - leftMargin - rightMargin
+	columnWidth := contentWidth/2 - 5
 
-		pdf.AddPage()
+	// ===== ヘッダー =====
+	pdf.SetXY(140, 15)
+	pdf.CellFormat(
+		50, 10,
+		fmt.Sprintf("作成日: %s", time.Now().Format("2006-01-02")),
+		"", 0, "R", false, 0, "",
+	)
 
-		// =========================
-		// ① 作成日（右上）
-		// =========================
-		pdf.SetXY(140, 15)
-		pdf.CellFormat(
-			50, 10,
-			fmt.Sprintf("作成日: %s", time.Now().Format("2006-01-02")),
-			"", 0, "R", false, 0, "",
-		)
+	pdf.SetY(30)
+	pdf.SetFont("NotoSans", "", 14)
+	pdf.Cell(0, 10, "工事報告書")
+	pdf.Ln(15)
+	pdf.SetFont("NotoSans", "", 11)
 
-		pdf.SetY(30)
+	currentY := pdf.GetY()
 
-		// =========================
-		// ② タイトル
-		// =========================
-		pdf.SetFont("NotoSans", "", 14)
-		pdf.Cell(0, 10, "工事報告書")
-		pdf.Ln(15)
+	for i := 0; i < len(imagePaths); i += 2 {
 
-		pdf.SetFont("NotoSans", "", 12)
+		rowStartY := currentY
+		maxRowHeight := 0.0
 
-		// =========================
-		// ③ 画像
-		// =========================
-		imageWidth := 150.0
-		x := (pageWidth - imageWidth) / 2.0
+		for col := 0; col < 2; col++ {
 
-		startY := pdf.GetY()
+			index := i + col
+			if index >= len(imagePaths) {
+				break
+			}
 
-		pdf.ImageOptions(
-			imagePath,
-			x,
-			startY,
-			imageWidth,
-			0, // 高さ自動
-			false,
-			gofpdf.ImageOptions{ImageType: "", ReadDpi: true},
-			0,
-			"",
-		)
+			x := leftMargin + float64(col)*(columnWidth+10)
+			y := rowStartY
 
-		// 実際の画像高さ計算
-		info := pdf.GetImageInfo(imagePath)
-		ratio := info.Height() / info.Width()
-		imageHeight := imageWidth * ratio
+			// 画像サイズ計算
+			imageWidth := columnWidth
+			info := pdf.GetImageInfo(imagePaths[index])
+			ratio := info.Height() / info.Width()
+			imageHeight := imageWidth * ratio
 
-		nextY := startY + imageHeight + 10
+			// ページ下限チェック
+			if y+imageHeight+30 > bottomLimit {
+				pdf.AddPage()
+				currentY = 30
+				rowStartY = currentY
+				y = rowStartY
+			}
 
-		// 画像がページ下限を超える場合は縮小
-		if nextY > bottomLimit {
-			maxHeight := bottomLimit - startY - 10
-			scale := maxHeight / imageHeight
-			imageWidth = imageWidth * scale
-			imageHeight = imageHeight * scale
-			x = (pageWidth - imageWidth) / 2.0
-
+			// 画像描画
 			pdf.ImageOptions(
-				imagePath,
+				imagePaths[index],
 				x,
-				startY,
+				y,
 				imageWidth,
 				imageHeight,
 				false,
@@ -118,19 +110,19 @@ func (s *ReportService) GeneratePDF(
 				"",
 			)
 
-			nextY = startY + imageHeight + 10
+			// キャプション位置
+			textY := y + imageHeight + 3
+			pdf.SetXY(x, textY)
+			pdf.MultiCell(columnWidth, 6, captions[index], "", "L", false)
+
+			// この列の総高さ
+			colHeight := imageHeight + 3 + pdf.GetY() - textY
+			if colHeight > maxRowHeight {
+				maxRowHeight = colHeight
+			}
 		}
 
-		pdf.SetY(nextY)
-
-		// =========================
-		// ④ キャプション
-		// =========================
-		if pdf.GetY() > bottomLimit {
-			pdf.AddPage()
-		}
-
-		pdf.MultiCell(0, 8, captions[i], "", "L", false)
+		currentY = rowStartY + maxRowHeight + 10
 	}
 
 	var buf bytes.Buffer
