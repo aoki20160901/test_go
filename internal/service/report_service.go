@@ -37,22 +37,28 @@ func (s *ReportService) GeneratePDF(
 
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(20, 20, 20)
+	pdf.SetAutoPageBreak(true, 20)
 
-	// 日本語フォント（事前にttf配置）
+	// 日本語フォント
 	pdf.AddUTF8Font("NotoSans", "", "./fonts/NotoSansJP-Regular.ttf")
 	pdf.SetFont("NotoSans", "", 12)
+
+	pageWidth, pageHeight := 210.0, 297.0
+	bottomLimit := pageHeight - 20
 
 	for i, imagePath := range imagePaths {
 
 		pdf.AddPage()
 
 		// =========================
-		// ① 右上：作成日
+		// ① 作成日（右上）
 		// =========================
 		pdf.SetXY(140, 15)
-		pdf.CellFormat(50, 10,
+		pdf.CellFormat(
+			50, 10,
 			fmt.Sprintf("作成日: %s", time.Now().Format("2006-01-02")),
-			"", 0, "R", false, 0, "")
+			"", 0, "R", false, 0, "",
+		)
 
 		pdf.SetY(30)
 
@@ -63,30 +69,67 @@ func (s *ReportService) GeneratePDF(
 		pdf.Cell(0, 10, "工事報告書")
 		pdf.Ln(15)
 
+		pdf.SetFont("NotoSans", "", 12)
+
 		// =========================
 		// ③ 画像
 		// =========================
 		imageWidth := 150.0
-		x := (210.0 - imageWidth) / 2.0
+		x := (pageWidth - imageWidth) / 2.0
+
+		startY := pdf.GetY()
 
 		pdf.ImageOptions(
 			imagePath,
 			x,
-			pdf.GetY(),
+			startY,
 			imageWidth,
-			0,
+			0, // 高さ自動
 			false,
 			gofpdf.ImageOptions{ImageType: "", ReadDpi: true},
 			0,
 			"",
 		)
 
-		pdf.Ln(95)
+		// 実際の画像高さ計算
+		info := pdf.GetImageInfo(imagePath)
+		ratio := info.Height() / info.Width()
+		imageHeight := imageWidth * ratio
+
+		nextY := startY + imageHeight + 10
+
+		// 画像がページ下限を超える場合は縮小
+		if nextY > bottomLimit {
+			maxHeight := bottomLimit - startY - 10
+			scale := maxHeight / imageHeight
+			imageWidth = imageWidth * scale
+			imageHeight = imageHeight * scale
+			x = (pageWidth - imageWidth) / 2.0
+
+			pdf.ImageOptions(
+				imagePath,
+				x,
+				startY,
+				imageWidth,
+				imageHeight,
+				false,
+				gofpdf.ImageOptions{ImageType: "", ReadDpi: true},
+				0,
+				"",
+			)
+
+			nextY = startY + imageHeight + 10
+		}
+
+		pdf.SetY(nextY)
 
 		// =========================
-		// ④ キャプション（画像下）
+		// ④ キャプション
 		// =========================
-		pdf.SetFont("NotoSans", "", 12)
+		if pdf.GetY() > bottomLimit {
+			pdf.AddPage()
+		}
+
 		pdf.MultiCell(0, 8, captions[i], "", "L", false)
 	}
 
