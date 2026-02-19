@@ -9,7 +9,7 @@ import (
 
 	"myapi/internal/handler"
 	"myapi/internal/llm"
-	"myapi/internal/pdf"
+	// "myapi/internal/pdf"
 	"myapi/internal/service"
 )
 
@@ -25,13 +25,13 @@ func main() {
 	// ==========================
 	// 2. Infrastructure生成
 	// ==========================
-	llmClient := llm.NewOpusClient(apiKey)
-	pdfGenerator := pdf.NewTemplateGenerator("templates/report_template.pdf")
+	llmClient := llm.NewOpusClient()
+	// pdfGenerator := pdf.NewTemplateGenerator("templates/report_template.pdf")
 
 	// ==========================
 	// 3. Service生成
 	// ==========================
-	reportService := service.NewReportService(llmClient, pdfGenerator)
+	reportService := service.NewReportService(llmClient)
 
 	// ==========================
 	// 4. Handler生成
@@ -43,7 +43,7 @@ func main() {
 	// ==========================
 	r := chi.NewRouter()
 
-	r.Post("/report", reportHandler.Generate)
+	r.Post("/report", reportHandler.GenerateReport)  // Generate → GenerateReport
 
 	// ==========================
 	// 6. Server起動

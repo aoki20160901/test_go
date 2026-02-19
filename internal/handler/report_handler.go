@@ -11,7 +11,8 @@ import (
 
 type ReportService interface {
 	GenerateCaption(ctx context.Context, text string) (string, error)
-	GeneratePDF(ctx context.Context, imagePaths []string, captions []string) ([]byte, error)
+	GenerateSouhyou(ctx context.Context, texts, captions []string) (string, error)
+	GeneratePDF(ctx context.Context, imagePaths []string, captions []string, souhyou string) ([]byte, error)
 }
 
 type ReportHandler struct {
@@ -96,10 +97,17 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 		captions = append(captions, caption)
 	}
 
+	// 総評をLLMで生成（写真全体を踏まえた1件、最後のページにのみ表示）
+	souhyou, err := h.service.GenerateSouhyou(ctx, texts, captions)
+	if err != nil {
+		http.Error(w, "総評生成失敗: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// =====================
 	// ③ PDF生成
 	// =====================
-	pdfBytes, err := h.service.GeneratePDF(ctx, imagePaths, captions)
+	pdfBytes, err := h.service.GeneratePDF(ctx, imagePaths, captions, souhyou)
 	if err != nil {
 		http.Error(w, "PDF生成失敗: "+err.Error(), http.StatusInternalServerError)
 		return
