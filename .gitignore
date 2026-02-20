@@ -1,0 +1,14 @@
+# Node.js
+node_modules/
+frontend/node_modules/
+package-lock.json
+
+# Uploads and generated files
+uploads/
+report.pdf
+
+# OS files
+.DS_Store
+
+# Go vendor (if needed)
+vendor/
