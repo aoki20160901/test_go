@@ -31,11 +31,6 @@ func (s *ReportService) GenerateCaption(ctx context.Context, text string) (strin
     return s.llm.GenerateCaption(ctx, text)
 }
 
-// GenerateSouhyou は全写真の依頼内容とキャプションを踏まえ、LLMで総評を1つ生成する。
-func (s *ReportService) GenerateSouhyou(ctx context.Context, texts, captions []string) (string, error) {
-    return s.llm.GenerateSouhyou(ctx, texts, captions)
-}
-
 // getImageRatio は画像ファイルの縦横比（高さ/幅）を返す。gofpdf に登録前でも使える。
 func getImageRatio(path string) (float64, error) {
     f, err := os.Open(path)
@@ -255,4 +250,9 @@ func (s *ReportService) GeneratePDF(
     }
 
     return buf.Bytes(), nil
+}
+
+// GenerateSouhyou は全写真の依頼内容とキャプションを踏まえ、LLMで総評を1つ生成する。
+func (s *ReportService) GenerateSouhyou(ctx context.Context, texts []string, comment string, captions []string) (string, error) {
+    return s.llm.GenerateSouhyou(ctx, texts, comment, captions)
 }

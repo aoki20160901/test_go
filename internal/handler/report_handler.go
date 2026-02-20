@@ -7,11 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"fmt"
 )
 
 type ReportService interface {
 	GenerateCaption(ctx context.Context, text string) (string, error)
-	GenerateSouhyou(ctx context.Context, texts, captions []string) (string, error)
+	GenerateSouhyou(ctx context.Context, texts []string, comment string, captions []string) (string, error)
 	GeneratePDF(ctx context.Context, imagePaths []string, captions []string, souhyou string) ([]byte, error)
 }
 
@@ -35,8 +36,9 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 
 	texts := r.MultipartForm.Value["text"]
 	files := r.MultipartForm.File["image"]
+	comment := r.FormValue("comment")
 
-	if len(texts) == 0 || len(files) == 0 {
+	if len(texts) == 0 || len(files) == 0 || comment == "" {
 		http.Error(w, "textとimageは必須です", http.StatusBadRequest)
 		return
 	}
@@ -98,7 +100,8 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 総評をLLMで生成（写真全体を踏まえた1件、最後のページにのみ表示）
-	souhyou, err := h.service.GenerateSouhyou(ctx, texts, captions)
+	souhyou, err := h.service.GenerateSouhyou(ctx, texts, comment, captions)
+	fmt.Printf("総評内容: [%s]\n", souhyou)
 	if err != nil {
 		http.Error(w, "総評生成失敗: "+err.Error(), http.StatusInternalServerError)
 		return

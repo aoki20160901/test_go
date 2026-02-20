@@ -47,7 +47,7 @@ export default function ReportForm() {
     formData.append("text", summary);
 
     try {
-      const response = await fetch("http://localhost:8080/report", {
+      const response = await fetch("/report", {
         method: "POST",
         body: formData,
       });

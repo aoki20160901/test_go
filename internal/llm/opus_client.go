@@ -135,7 +135,7 @@ func (c *OpusClient) GenerateCaption(ctx context.Context, text string) (string, 
 }
 
 // GenerateSouhyou は、全写真の依頼内容と状況説明を踏まえて総評を1つ生成する。
-func (c *OpusClient) GenerateSouhyou(ctx context.Context, texts, captions []string) (string, error) {
+func (c *OpusClient) GenerateSouhyou(ctx context.Context, texts []string, comment string, captions []string) (string, error) {
 	var b strings.Builder
 	b.WriteString("【工事依頼内容と各写真の状況説明】\n\n")
 	for i := range captions {
@@ -144,6 +144,7 @@ func (c *OpusClient) GenerateSouhyou(ctx context.Context, texts, captions []stri
 		}
 		b.WriteString(fmt.Sprintf("写真%d 状況説明: %s\n\n", i+1, captions[i]))
 	}
+	b.WriteString(fmt.Sprintf("全体の依頼内容: %s\n\n", comment))
 	b.WriteString("\n上記を踏まえ、報告書の「総評」を200文字以内で作成してください。")
 	b.WriteString("現地確認の結果をまとめる形で、断定調で簡潔に記載してください。")
 
