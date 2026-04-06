@@ -7,13 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-	"fmt"
 )
 
 type ReportService interface {
 	GenerateCaption(ctx context.Context, text string) (string, error)
-	GenerateSouhyou(ctx context.Context, texts []string, comment string, captions []string) (string, error)
-	GeneratePDF(ctx context.Context, imagePaths []string, captions []string, souhyou string) ([]byte, error)
+	GeneratePDF(ctx context.Context,
+		entranceImages []string, entranceCaptions []string,
+		hallwayImages []string, hallwayCaptions []string) ([]byte, error)
 }
 
 type ReportHandler struct {
@@ -34,17 +34,23 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	texts := r.MultipartForm.Value["text"]
-	files := r.MultipartForm.File["image"]
-	comment := r.FormValue("comment")
+	entranceTexts := r.MultipartForm.Value["entrance_texts"]
+	entranceFiles := r.MultipartForm.File["entrance_images"]
+	hallwayTexts := r.MultipartForm.Value["hallway_texts"]
+	hallwayFiles := r.MultipartForm.File["hallway_images"]
 
-	if len(texts) == 0 || len(files) == 0 || comment == "" {
-		http.Error(w, "textとimageは必須です", http.StatusBadRequest)
+	if len(entranceFiles) == 0 && len(hallwayFiles) == 0 {
+		http.Error(w, "玄関または廊下の画像が必要です", http.StatusBadRequest)
 		return
 	}
 
-	if len(texts) != len(files) {
-		http.Error(w, "textとimageの数が一致しません", http.StatusBadRequest)
+	if len(entranceTexts) != len(entranceFiles) {
+		http.Error(w, "玄関のテキストと画像の数が一致しません", http.StatusBadRequest)
+		return
+	}
+
+	if len(hallwayTexts) != len(hallwayFiles) {
+		http.Error(w, "廊下のテキストと画像の数が一致しません", http.StatusBadRequest)
 		return
 	}
 
@@ -52,14 +58,17 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	uploadDir := "./uploads"
 	os.MkdirAll(uploadDir, os.ModePerm)
 
-	var imagePaths []string
-	var captions []string
+	var entranceImages []string
+	var entranceCaptions []string
+	var hallwayImages []string
+	var hallwayCaptions []string
 
-	for i, fileHeader := range files {
+	// =====================
+	// 玄関の画像処理
+	// =====================
+	for i, fileHeader := range entranceFiles {
 
-		// =====================
 		// ① 画像保存
-		// =====================
 		src, err := fileHeader.Open()
 		if err != nil {
 			http.Error(w, "file open error", http.StatusInternalServerError)
@@ -85,32 +94,65 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		imagePaths = append(imagePaths, savePath)
+		entranceImages = append(entranceImages, savePath)
 
-		// =====================
-		// ② LLM説明生成（Visionなし）
-		// =====================
-		caption, err := h.service.GenerateCaption(ctx, texts[i])
+		// ② LLM説明生成
+		caption, err := h.service.GenerateCaption(ctx, entranceTexts[i])
 		if err != nil {
 			http.Error(w, "LLM error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		captions = append(captions, caption)
+		entranceCaptions = append(entranceCaptions, caption)
 	}
 
-	// 総評をLLMで生成（写真全体を踏まえた1件、最後のページにのみ表示）
-	souhyou, err := h.service.GenerateSouhyou(ctx, texts, comment, captions)
-	fmt.Printf("総評内容: [%s]\n", souhyou)
-	if err != nil {
-		http.Error(w, "総評生成失敗: "+err.Error(), http.StatusInternalServerError)
-		return
+	// =====================
+	// 廊下の画像処理
+	// =====================
+	for i, fileHeader := range hallwayFiles {
+
+		// ① 画像保存
+		src, err := fileHeader.Open()
+		if err != nil {
+			http.Error(w, "file open error", http.StatusInternalServerError)
+			return
+		}
+
+		filename := time.Now().Format("20060102150405") + "_" + fileHeader.Filename
+		savePath := filepath.Join(uploadDir, filename)
+
+		dst, err := os.Create(savePath)
+		if err != nil {
+			src.Close()
+			http.Error(w, "file save error", http.StatusInternalServerError)
+			return
+		}
+
+		_, err = io.Copy(dst, src)
+		src.Close()
+		dst.Close()
+
+		if err != nil {
+			http.Error(w, "file copy error", http.StatusInternalServerError)
+			return
+		}
+
+		hallwayImages = append(hallwayImages, savePath)
+
+		// ② LLM説明生成
+		caption, err := h.service.GenerateCaption(ctx, hallwayTexts[i])
+		if err != nil {
+			http.Error(w, "LLM error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		hallwayCaptions = append(hallwayCaptions, caption)
 	}
 
 	// =====================
 	// ③ PDF生成
 	// =====================
-	pdfBytes, err := h.service.GeneratePDF(ctx, imagePaths, captions, souhyou)
+	pdfBytes, err := h.service.GeneratePDF(ctx, entranceImages, entranceCaptions, hallwayImages, hallwayCaptions)
 	if err != nil {
 		http.Error(w, "PDF生成失敗: "+err.Error(), http.StatusInternalServerError)
 		return
