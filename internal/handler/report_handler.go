@@ -13,7 +13,8 @@ type ReportService interface {
 	GenerateCaption(ctx context.Context, text string) (string, error)
 	GeneratePDF(ctx context.Context,
 		entranceImages []string, entranceCaptions []string,
-		hallwayImages []string, hallwayCaptions []string) ([]byte, error)
+		hallwayImages []string, hallwayCaptions []string,
+		summary string) ([]byte, error)
 }
 
 type ReportHandler struct {
@@ -38,6 +39,12 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	entranceFiles := r.MultipartForm.File["entrance_images"]
 	hallwayTexts := r.MultipartForm.Value["hallway_texts"]
 	hallwayFiles := r.MultipartForm.File["hallway_images"]
+
+	// 総評(summary)を取得
+	summary := ""
+	if arr, ok := r.MultipartForm.Value["summary"]; ok && len(arr) > 0 {
+		summary = arr[0]
+	}
 
 	if len(entranceFiles) == 0 && len(hallwayFiles) == 0 {
 		http.Error(w, "玄関または廊下の画像が必要です", http.StatusBadRequest)
@@ -152,7 +159,7 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	// =====================
 	// ③ PDF生成
 	// =====================
-	pdfBytes, err := h.service.GeneratePDF(ctx, entranceImages, entranceCaptions, hallwayImages, hallwayCaptions)
+	pdfBytes, err := h.service.GeneratePDF(ctx, entranceImages, entranceCaptions, hallwayImages, hallwayCaptions, summary)
 	if err != nil {
 		http.Error(w, "PDF生成失敗: "+err.Error(), http.StatusInternalServerError)
 		return

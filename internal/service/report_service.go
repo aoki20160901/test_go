@@ -89,8 +89,8 @@ func (s *ReportService) GeneratePDF(
 	entranceCaptions []string,
 	hallwayImages []string,
 	hallwayCaptions []string,
+	summary string,
 ) ([]byte, error) {
-
 	if len(entranceImages) != len(entranceCaptions) {
 		return nil, fmt.Errorf("玄関のimageとcaptionの数が一致しません")
 	}
@@ -125,7 +125,8 @@ func (s *ReportService) GeneratePDF(
 
 	pdf.SetY(30)
 	pdf.SetFont("NotoSans", "", 14)
-	pdf.Cell(0, 10, "XX報告書")
+	// pdf.Cell(0, 10, "XX報告書")
+	pdf.Cell(0, 10, "テストユーザー様報告書")
 	pdf.Ln(15)
 	pdf.SetFont("NotoSans", "", 11)
 
@@ -157,6 +158,20 @@ func (s *ReportService) GeneratePDF(
 		currentY = pdf.GetY()
 
 		currentY = renderSection(pdf, hallwayImages, hallwayCaptions, columnWidth, leftMargin, bottomLimit, currentY)
+	}
+
+	// ===== 総評（summary）を最後に出力 =====
+	if strings.TrimSpace(summary) != "" {
+		pdf.AddPage()
+		pdf.SetFont("NotoSans", "", 14)
+		pdf.Cell(0, 10, "総評")
+		pdf.Ln(12)
+		pdf.SetFont("NotoSans", "", 11)
+		// 複数行対応
+		lines := wrapText(summary, 40)
+		for _, line := range lines {
+			pdf.MultiCell(0, 8, line, "", "L", false)
+		}
 	}
 
 	var buf bytes.Buffer
