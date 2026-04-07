@@ -162,13 +162,26 @@ func (s *ReportService) GeneratePDF(
 
 	// ===== 総評（summary）を最後に出力 =====
 	if strings.TrimSpace(summary) != "" {
+		// texts, captionsを合成
+		var allTexts []string
+		allTexts = append(allTexts, entranceCaptions...)
+		allTexts = append(allTexts, hallwayCaptions...)
+		var allCaptions []string
+		allCaptions = append(allCaptions, entranceCaptions...)
+		allCaptions = append(allCaptions, hallwayCaptions...)
+
+		// LLMで総評生成
+		souhyou, err := s.llm.GenerateSouhyou(ctx, allTexts, summary, allCaptions)
+		if err != nil {
+			souhyou = summary + "（総評生成エラー: " + err.Error() + ")"
+		}
 		pdf.AddPage()
 		pdf.SetFont("NotoSans", "", 14)
 		pdf.Cell(0, 10, "総評")
 		pdf.Ln(12)
 		pdf.SetFont("NotoSans", "", 11)
 		// 複数行対応
-		lines := wrapText(summary, 40)
+		lines := wrapText(souhyou, 40)
 		for _, line := range lines {
 			pdf.MultiCell(0, 8, line, "", "L", false)
 		}
