@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -29,11 +28,6 @@ func NewOpusClient() *OpusClient {
 			Timeout: 60 * time.Second,
 		},
 	}
-}
-
-type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
 }
 
 type chatMessage struct {
@@ -188,27 +182,66 @@ func (c *OpusClient) GenerateCaption(ctx context.Context, text string) (string, 
 	return parsed.Content[0].Text, nil
 }
 
-// SplitSummaryByArea はsummaryをエリアごとに分割し、各エリア名をキー、内容を値としたmapで返す
-func (c *OpusClient) SplitSummaryByArea(ctx context.Context, summary string) (map[string]string, error) {
-	// エリア名リスト
-	// areas := []string{"屋外", "玄関", "廊下", "階段", "寝室", "居室", "台所", "トイレ", "浴室", "脱衣所"}
-	result := make(map[string]string)
-	areaNames := []string{"屋外", "玄関", "廊下", "階段", "寝室", "居室", "台所", "トイレ", "浴室", "脱衣所"}
-	// area名でsplitし、各エリア名＋内容を再構成
-	re := regexp.MustCompile("(" + strings.Join(areaNames, "|") + ")")
-	parts := re.Split(summary, -1)
-	indices := re.FindAllStringIndex(summary, -1)
-	for i, idx := range indices {
-		area := summary[idx[0]:idx[1]]
-		var text string
-		if i+1 < len(parts) {
-			text = strings.TrimSpace(parts[i+1])
-		} else {
-			text = ""
-		}
-		result[area] = text
+// SplitSummaryByAreaWithAI はsummaryをAIでエリアごとに分割し、各エリア名をキー、内容を値としたmapで返す
+func (c *OpusClient) SplitSummaryByAreaWithAI(ctx context.Context, summary string) (map[string]string, error) {
+	prompt := `以下のsummaryをエリアごとに分割し、各エリア名と内容をJSON形式で返してください。エリア名は「屋外」「玄関」「廊下」「階段」「寝室」「居室」「リビング」「トイレ」「浴室」「脱衣所」です。エリアがsummaryに含まれていない場合は、そのエリアはJSONに含めないでください。
+summary:
+` + summary + `
+
+出力例:
+{"玄関": "玄関の内容...", "浴室": "浴室の内容..."}`
+
+	reqBody := anthropicRequest{
+		Model:     c.Model,
+		MaxTokens: 500,
+		Messages: []message{
+			{Role: "user", Content: prompt},
+		},
 	}
-	return result, nil
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/messages", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", c.APIKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Claude error: %s", string(bodyBytes))
+	}
+	var parsed struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(bodyBytes, &parsed); err != nil {
+		return nil, err
+	}
+	if len(parsed.Content) == 0 {
+		return nil, fmt.Errorf("empty response from Claude")
+	}
+	// Claudeの応答からJSON部分を抽出
+	aiText := parsed.Content[0].Text
+	aiText = strings.TrimSpace(aiText)
+	// 先頭・末尾に```jsonや```が付く場合を除去
+	aiText = strings.TrimPrefix(aiText, "```json")
+	aiText = strings.TrimPrefix(aiText, "```")
+	aiText = strings.TrimSuffix(aiText, "```")
+	aiText = strings.TrimSpace(aiText)
+	var areaMap map[string]string
+	if err := json.Unmarshal([]byte(aiText), &areaMap); err != nil {
+		return nil, fmt.Errorf("failed to parse AI JSON: %w\nAI output: %s", err, aiText)
+	}
+	return areaMap, nil
 }
 
 // GenerateSouhyou は、全写真の依頼内容と状況説明を踏まえて総評を1つ生成する。

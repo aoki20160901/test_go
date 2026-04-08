@@ -99,7 +99,7 @@ func (s *ReportService) GeneratePDF(
 	}
 
 	// ステップ2: summaryをエリアごとに分割
-	areaSummaries, err := s.llm.SplitSummaryByArea(ctx, summary)
+	areaSummaries, err := s.llm.SplitSummaryByAreaWithAI(ctx, summary)
 	if err != nil {
 		areaSummaries = map[string]string{}
 	}
