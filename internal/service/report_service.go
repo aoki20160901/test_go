@@ -103,7 +103,28 @@ func (s *ReportService) GeneratePDF(
 	if err != nil {
 		areaSummaries = map[string]string{}
 	}
-	_ = areaSummaries // ステップ3で利用予定
+
+	// ステップ1: areaSummariesの各値をGenerateCaptionでAI要約
+	areaCaptions := map[string]string{}
+	for area, text := range areaSummaries {
+		caption, err := s.llm.GenerateCaption(ctx, text)
+		if err != nil {
+			areaCaptions[area] = ""
+		} else {
+			fmt.Println("[AI要約]", area, ":", caption)
+			areaCaptions[area] = caption
+		}
+	}
+
+	// entranceCaptions, hallwayCaptions を areaCaptions で埋める
+	entranceCaptions = make([]string, len(entranceImages))
+	for i := range entranceCaptions {
+		entranceCaptions[i] = areaCaptions["玄関"]
+	}
+	hallwayCaptions = make([]string, len(hallwayImages))
+	for i := range hallwayCaptions {
+		hallwayCaptions[i] = areaCaptions["廊下"]
+	}
 
 	pdf := gofpdf.New("L", "mm", "A4", "")
 	pdf.SetMargins(20, 20, 20)
@@ -141,8 +162,8 @@ func (s *ReportService) GeneratePDF(
 
 	// エリアリスト
 	areaList := []struct {
-		Name   string
-		Images []string
+		Name     string
+		Images   []string
 		Captions []string
 	}{
 		{"屋外", nil, nil},
@@ -159,6 +180,8 @@ func (s *ReportService) GeneratePDF(
 
 	for _, area := range areaList {
 		if len(area.Images) > 0 {
+			// エリア見出しの前の改行を元に戻す
+			// pdf.Ln(12) を削除または必要に応じて pdf.Ln(8) などに戻す
 			pdf.SetFont("NotoSans", "", 12)
 			pdf.Cell(0, 8, "【"+area.Name+"】")
 			pdf.Ln(8)
@@ -167,14 +190,7 @@ func (s *ReportService) GeneratePDF(
 
 			currentY = renderSection(pdf, area.Images, area.Captions, columnWidth, leftMargin, bottomLimit, currentY)
 		}
-		// areaSummariesの内容を各エリアごとに反映
-		sum, ok := areaSummaries[area.Name]
-		if ok && strings.TrimSpace(sum) != "" {
-			pdf.Ln(3)
-			pdf.SetFont("NotoSans", "", 11)
-			pdf.MultiCell(0, 8, sum, "", "L", false)
-			currentY = pdf.GetY()
-		}
+		// areaCaptions（AI要約済みテキスト）は画像キャプションとしてのみ利用し、エリアsummaryとしては出力しない
 	}
 
 	// ===== 総評（summary）を最後に出力 =====
