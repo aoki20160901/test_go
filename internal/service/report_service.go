@@ -98,7 +98,14 @@ func (s *ReportService) GeneratePDF(
 		return nil, fmt.Errorf("廊下のimageとcaptionの数が一致しません")
 	}
 
-	pdf := gofpdf.New("P", "mm", "A4", "")
+	// ステップ2: summaryをエリアごとに分割
+	areaSummaries, err := s.llm.SplitSummaryByArea(ctx, summary)
+	if err != nil {
+		areaSummaries = map[string]string{}
+	}
+	_ = areaSummaries // ステップ3で利用予定
+
+	pdf := gofpdf.New("L", "mm", "A4", "")
 	pdf.SetMargins(20, 20, 20)
 	pdf.SetAutoPageBreak(false, 20)
 
@@ -141,16 +148,18 @@ func (s *ReportService) GeneratePDF(
 		currentY = pdf.GetY()
 
 		currentY = renderSection(pdf, entranceImages, entranceCaptions, columnWidth, leftMargin, bottomLimit, currentY)
+
+		// 玄関summaryを写真群の下に出力
+		if summary, ok := areaSummaries["玄関"]; ok && strings.TrimSpace(summary) != "" {
+			pdf.Ln(3)
+			pdf.SetFont("NotoSans", "", 11)
+			pdf.MultiCell(0, 8, summary, "", "L", false)
+			currentY = pdf.GetY()
+		}
 	}
 
 	// ===== 廊下セクション =====
 	if len(hallwayImages) > 0 {
-		// 玄関セクションがあった場合は改ページ
-		if len(entranceImages) > 0 {
-			pdf.AddPage()
-			currentY = 30
-		}
-
 		pdf.SetFont("NotoSans", "", 12)
 		pdf.Cell(0, 8, "【廊下】")
 		pdf.Ln(8)
@@ -158,37 +167,45 @@ func (s *ReportService) GeneratePDF(
 		currentY = pdf.GetY()
 
 		currentY = renderSection(pdf, hallwayImages, hallwayCaptions, columnWidth, leftMargin, bottomLimit, currentY)
+
+		// 廊下summaryを写真群の下に出力
+		if summary, ok := areaSummaries["廊下"]; ok && strings.TrimSpace(summary) != "" {
+			pdf.Ln(3)
+			pdf.SetFont("NotoSans", "", 11)
+			pdf.MultiCell(0, 8, summary, "", "L", false)
+			currentY = pdf.GetY()
+		}
 	}
 
 	// ===== 総評（summary）を最後に出力 =====
-	if strings.TrimSpace(summary) != "" {
-		// texts, captionsを合成
-		var allTexts []string
-		allTexts = append(allTexts, entranceCaptions...)
-		allTexts = append(allTexts, hallwayCaptions...)
-		var allCaptions []string
-		allCaptions = append(allCaptions, entranceCaptions...)
-		allCaptions = append(allCaptions, hallwayCaptions...)
+	// if strings.TrimSpace(summary) != "" {
+	// 	// texts, captionsを合成
+	// 	var allTexts []string
+	// 	allTexts = append(allTexts, entranceCaptions...)
+	// 	allTexts = append(allTexts, hallwayCaptions...)
+	// 	var allCaptions []string
+	// 	allCaptions = append(allCaptions, entranceCaptions...)
+	// 	allCaptions = append(allCaptions, hallwayCaptions...)
 
-		// LLMで総評生成
-		souhyou, err := s.llm.GenerateSouhyou(ctx, allTexts, summary, allCaptions)
-		if err != nil {
-			souhyou = summary + "（総評生成エラー: " + err.Error() + ")"
-		}
-		pdf.AddPage()
-		pdf.SetFont("NotoSans", "", 14)
-		pdf.Cell(0, 10, "総評")
-		pdf.Ln(12)
-		pdf.SetFont("NotoSans", "", 11)
-		// 複数行対応
-		lines := wrapText(souhyou, 40)
-		for _, line := range lines {
-			pdf.MultiCell(0, 8, line, "", "L", false)
-		}
-	}
+	// 	// LLMで総評生成
+	// 	souhyou, err := s.llm.GenerateSouhyou(ctx, allTexts, summary, allCaptions)
+	// 	if err != nil {
+	// 		souhyou = summary + "（総評生成エラー: " + err.Error() + ")"
+	// 	}
+	// 	pdf.AddPage()
+	// 	pdf.SetFont("NotoSans", "", 14)
+	// 	pdf.Cell(0, 10, "総評")
+	// 	pdf.Ln(12)
+	// 	pdf.SetFont("NotoSans", "", 11)
+	// 	// 複数行対応
+	// 	lines := wrapText(souhyou, 40)
+	// 	for _, line := range lines {
+	// 		pdf.MultiCell(0, 8, line, "", "L", false)
+	// 	}
+	// }
 
 	var buf bytes.Buffer
-	err := pdf.Output(&buf)
+	err = pdf.Output(&buf)
 	if err != nil {
 		return nil, err
 	}

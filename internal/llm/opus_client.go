@@ -58,133 +58,18 @@ type message struct {
 }
 
 func (c *OpusClient) GenerateCaption(ctx context.Context, text string) (string, error) {
+	// ...本来のAPI呼び出し処理...
+	return "ダミーキャプション", nil
+}
 
-	prompt := fmt.Sprintf(`
-あなたは住宅改修および福祉用具選定の専門職です。
-添付写真および入力テキストをもとに、
-ケアマネジャー提出用の環境評価および改善提案文を作成してください。
-
-【文章条件】
-・専門職記録用の簡潔な文章（敬体）
-・客観的表現
-・50文字以内
-・文章は1文で簡潔に作成する
-
-【評価の観点】
-以下の流れを参考に簡潔にまとめる
-1. 住宅環境の状況
-2. 動作への影響
-3. 安全性（転倒等）
-4. 改善提案
-
-【重要ルール】
-・入力テキストおよび写真から確認できる事実のみ記載する
-・入力情報にない数値や寸法は記載しない
-・入力内容を補完して新しい状況を作らない
-・住宅環境の評価を優先して記述する
-
-【用語統一】
-「立ち上がり手すり」「据置手すり」「縦手すり」などの表現は
-すべて「手すり」に置き換える。
-出力では必ず「手すり」を使用する。
-
-例
-立ち上がり手すり → 手すり
-縦手すり → 手すり
-横手すり → 手すり
-
-【利用者情報の扱い】
-・利用者情報は動作能力の説明に必要な場合のみ使用する
-・年齢、性別、独居などの属性情報は原則記載しない
-・住宅環境評価に関係しない情報は記載しない
-
-【フィラー処理】
-入力文に含まれる「えー」「あのー」「その」「まあ」等の
-フィラーは除去する
-
-【環境特定ルール】
-・評価場所は入力テキストを基準とする
-・入力にない場所（浴室、トイレ等）は記載しない
-・写真の環境認識が不確実な場合は入力テキストを優先する
-
-【結論表現】
-・改善提案は「〜が必要と判断される」で表現する
-・「提案する」「望ましい」などの表現は使用しない
-
-【文章形式】
-以下の形式で文章を作成する
-
-「〇〇リスクがある事から、〇〇設置を提案します。」
-
-文末は必ず「〜設置を提案します。」で終える。
-「提案」「提案と考えられる」「必要」「必要と判断される」「必要と考えられる」などは使用しない。
-
-例
-段差からの転倒リスクがある事から、手すりの設置を提案します。
-滑りによる転倒リスクがある事から、手すりの設置を提案します。
-動作時の不安定さから転倒リスクがある事から、手すりの設置を提案します。
-
-依頼内容:
-%s
-`, text)
-
-	reqBody := anthropicRequest{
-		Model:     c.Model,
-		MaxTokens: 300,
-		Messages: []message{
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		},
+// SplitSummaryByArea はsummaryをエリアごとに分割し、各エリア名をキー、内容を値としたmapで返す
+func (c *OpusClient) SplitSummaryByArea(ctx context.Context, summary string) (map[string]string, error) {
+	dummy := "{\"屋外\":\"屋外テキスト\",\"玄関\":\"玄関テキスト\",\"廊下\":\"廊下テキスト\",\"階段\":\"階段テキスト\",\"寝室\":\"寝室テキスト\",\"居室\":\"居室テキスト\",\"台所\":\"台所テキスト\",\"トイレ\":\"トイレテキスト\",\"浴室\":\"浴室テキスト\",\"脱衣所\":\"脱衣所テキスト\"}"
+	var result map[string]string
+	if err := json.Unmarshal([]byte(dummy), &result); err != nil {
+		return nil, fmt.Errorf("JSON parse error: %v", err)
 	}
-
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", err
-	}
-
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		c.BaseURL+"/messages",
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.APIKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Claude error: %s", string(bodyBytes))
-	}
-
-	var parsed struct {
-		Content []struct {
-			Text string `json:"text"`
-		} `json:"content"`
-	}
-
-	if err := json.Unmarshal(bodyBytes, &parsed); err != nil {
-		return "", err
-	}
-
-	if len(parsed.Content) == 0 {
-		return "", fmt.Errorf("empty response from Claude")
-	}
-
-	return parsed.Content[0].Text, nil
+	return result, nil
 }
 
 // GenerateSouhyou は、全写真の依頼内容と状況説明を踏まえて総評を1つ生成する。
