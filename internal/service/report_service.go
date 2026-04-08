@@ -180,14 +180,7 @@ func (s *ReportService) GeneratePDF(
 
 	for _, area := range areaList {
 		if len(area.Images) > 0 {
-			// エリア見出しの前の改行を元に戻す
-			// pdf.Ln(12) を削除または必要に応じて pdf.Ln(8) などに戻す
-			pdf.SetFont("NotoSans", "", 12)
-			pdf.Cell(0, 8, "【"+area.Name+"】")
-			pdf.Ln(8)
-			pdf.SetFont("NotoSans", "", 11)
-			currentY = pdf.GetY()
-
+			// エリア見出しを出力せず、スペースを詰めてテキスト部分を広くする
 			currentY = renderSection(pdf, area.Images, area.Captions, columnWidth, leftMargin, bottomLimit, currentY)
 		}
 		// areaCaptions（AI要約済みテキスト）は画像キャプションとしてのみ利用し、エリアsummaryとしては出力しない
