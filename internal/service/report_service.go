@@ -167,11 +167,12 @@ func (s *ReportService) GeneratePDF(
 
 			currentY = renderSection(pdf, area.Images, area.Captions, columnWidth, leftMargin, bottomLimit, currentY)
 		}
-		// summaryがあれば出力
-		if summary, ok := areaSummaries[area.Name]; ok && strings.TrimSpace(summary) != "" {
+		// areaSummariesの内容を各エリアごとに反映
+		sum, ok := areaSummaries[area.Name]
+		if ok && strings.TrimSpace(sum) != "" {
 			pdf.Ln(3)
 			pdf.SetFont("NotoSans", "", 11)
-			pdf.MultiCell(0, 8, summary, "", "L", false)
+			pdf.MultiCell(0, 8, sum, "", "L", false)
 			currentY = pdf.GetY()
 		}
 	}

@@ -46,6 +46,19 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 		summary = arr[0]
 	}
 
+	// ステップ1: summaryをAIでエリアごとに分割
+	areaSummaries := map[string]string{}
+	if summary != "" {
+		if s, ok := h.service.(interface {
+			SplitSummaryByAreaWithAI(ctx context.Context, summary string) (map[string]string, error)
+		}); ok {
+			m, err := s.SplitSummaryByAreaWithAI(ctx, summary)
+			if err == nil {
+				areaSummaries = m
+			}
+		}
+	}
+
 	if len(entranceFiles) == 0 && len(hallwayFiles) == 0 {
 		http.Error(w, "玄関または廊下の画像が必要です", http.StatusBadRequest)
 		return
@@ -73,8 +86,7 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	// =====================
 	// 玄関の画像処理
 	// =====================
-	for i, fileHeader := range entranceFiles {
-
+	for _, fileHeader := range entranceFiles {
 		// ① 画像保存
 		src, err := fileHeader.Open()
 		if err != nil {
@@ -103,21 +115,23 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 
 		entranceImages = append(entranceImages, savePath)
 
-		// ② LLM説明生成
-		caption, err := h.service.GenerateCaption(ctx, entranceTexts[i])
+		// ② LLM説明生成（areaSummaries["玄関"]を使う）
+		text := ""
+		if v, ok := areaSummaries["玄関"]; ok {
+			text = v
+		}
+		caption, err := h.service.GenerateCaption(ctx, text)
 		if err != nil {
 			http.Error(w, "LLM error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-
 		entranceCaptions = append(entranceCaptions, caption)
 	}
 
 	// =====================
 	// 廊下の画像処理
 	// =====================
-	for i, fileHeader := range hallwayFiles {
-
+	for _, fileHeader := range hallwayFiles {
 		// ① 画像保存
 		src, err := fileHeader.Open()
 		if err != nil {
@@ -146,13 +160,16 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 
 		hallwayImages = append(hallwayImages, savePath)
 
-		// ② LLM説明生成
-		caption, err := h.service.GenerateCaption(ctx, hallwayTexts[i])
+		// ② LLM説明生成（areaSummaries["廊下"]を使う）
+		text := ""
+		if v, ok := areaSummaries["廊下"]; ok {
+			text = v
+		}
+		caption, err := h.service.GenerateCaption(ctx, text)
 		if err != nil {
 			http.Error(w, "LLM error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-
 		hallwayCaptions = append(hallwayCaptions, caption)
 	}
 
