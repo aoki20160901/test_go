@@ -8,9 +8,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
-	"regexp"
 )
 
 type OpusClient struct {
@@ -193,15 +193,20 @@ func (c *OpusClient) SplitSummaryByArea(ctx context.Context, summary string) (ma
 	// エリア名リスト
 	// areas := []string{"屋外", "玄関", "廊下", "階段", "寝室", "居室", "台所", "トイレ", "浴室", "脱衣所"}
 	result := make(map[string]string)
-	// 正規表現でエリアごとに分割
-	re := regexp.MustCompile(`(屋外|玄関|廊下|階段|寝室|居室|台所|トイレ|浴室|脱衣所)([\s\S]*?)(?=(屋外|玄関|廊下|階段|寝室|居室|台所|トイレ|浴室|脱衣所|$))`)
-	matches := re.FindAllStringSubmatch(summary, -1)
-	for _, m := range matches {
-		if len(m) >= 3 {
-			area := m[1]
-			text := strings.TrimSpace(m[2])
-			result[area] = text
+	areaNames := []string{"屋外", "玄関", "廊下", "階段", "寝室", "居室", "台所", "トイレ", "浴室", "脱衣所"}
+	// area名でsplitし、各エリア名＋内容を再構成
+	re := regexp.MustCompile("(" + strings.Join(areaNames, "|") + ")")
+	parts := re.Split(summary, -1)
+	indices := re.FindAllStringIndex(summary, -1)
+	for i, idx := range indices {
+		area := summary[idx[0]:idx[1]]
+		var text string
+		if i+1 < len(parts) {
+			text = strings.TrimSpace(parts[i+1])
+		} else {
+			text = ""
 		}
+		result[area] = text
 	}
 	return result, nil
 }

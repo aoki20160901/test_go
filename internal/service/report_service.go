@@ -139,37 +139,36 @@ func (s *ReportService) GeneratePDF(
 
 	currentY := pdf.GetY()
 
-	// =====玄関セクション =====
-	if len(entranceImages) > 0 {
-		pdf.SetFont("NotoSans", "", 12)
-		pdf.Cell(0, 8, "【玄関】")
-		pdf.Ln(8)
-		pdf.SetFont("NotoSans", "", 11)
-		currentY = pdf.GetY()
-
-		currentY = renderSection(pdf, entranceImages, entranceCaptions, columnWidth, leftMargin, bottomLimit, currentY)
-
-		// 玄関summaryを写真群の下に出力
-		if summary, ok := areaSummaries["玄関"]; ok && strings.TrimSpace(summary) != "" {
-			pdf.Ln(3)
-			pdf.SetFont("NotoSans", "", 11)
-			pdf.MultiCell(0, 8, summary, "", "L", false)
-			currentY = pdf.GetY()
-		}
+	// エリアリスト
+	areaList := []struct {
+		Name   string
+		Images []string
+		Captions []string
+	}{
+		{"屋外", nil, nil},
+		{"玄関", entranceImages, entranceCaptions},
+		{"廊下", hallwayImages, hallwayCaptions},
+		{"階段", nil, nil},
+		{"寝室", nil, nil},
+		{"居室", nil, nil},
+		{"台所", nil, nil},
+		{"トイレ", nil, nil},
+		{"浴室", nil, nil},
+		{"脱衣所", nil, nil},
 	}
 
-	// ===== 廊下セクション =====
-	if len(hallwayImages) > 0 {
-		pdf.SetFont("NotoSans", "", 12)
-		pdf.Cell(0, 8, "【廊下】")
-		pdf.Ln(8)
-		pdf.SetFont("NotoSans", "", 11)
-		currentY = pdf.GetY()
+	for _, area := range areaList {
+		if len(area.Images) > 0 {
+			pdf.SetFont("NotoSans", "", 12)
+			pdf.Cell(0, 8, "【"+area.Name+"】")
+			pdf.Ln(8)
+			pdf.SetFont("NotoSans", "", 11)
+			currentY = pdf.GetY()
 
-		currentY = renderSection(pdf, hallwayImages, hallwayCaptions, columnWidth, leftMargin, bottomLimit, currentY)
-
-		// 廊下summaryを写真群の下に出力
-		if summary, ok := areaSummaries["廊下"]; ok && strings.TrimSpace(summary) != "" {
+			currentY = renderSection(pdf, area.Images, area.Captions, columnWidth, leftMargin, bottomLimit, currentY)
+		}
+		// summaryがあれば出力
+		if summary, ok := areaSummaries[area.Name]; ok && strings.TrimSpace(summary) != "" {
 			pdf.Ln(3)
 			pdf.SetFont("NotoSans", "", 11)
 			pdf.MultiCell(0, 8, summary, "", "L", false)
