@@ -99,6 +99,43 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	var bathroomCaptions []string
 
 	// =====================
+	// 屋外の画像処理
+	// =====================
+	for _, fileHeader := range r.MultipartForm.File["outdoor_images"] {
+		src, err := fileHeader.Open()
+		if err != nil {
+			http.Error(w, "file open error", http.StatusInternalServerError)
+			return
+		}
+		filename := time.Now().Format("20060102150405") + "_" + fileHeader.Filename
+		savePath := filepath.Join(uploadDir, filename)
+		dst, err := os.Create(savePath)
+		if err != nil {
+			src.Close()
+			http.Error(w, "file save error", http.StatusInternalServerError)
+			return
+		}
+		_, err = io.Copy(dst, src)
+		src.Close()
+		dst.Close()
+		if err != nil {
+			http.Error(w, "file copy error", http.StatusInternalServerError)
+			return
+		}
+		outdoorImages = append(outdoorImages, savePath)
+		text := ""
+		if v, ok := areaSummaries["屋外"]; ok {
+			text = v
+		}
+		caption, err := h.service.GenerateCaption(ctx, text)
+		if err != nil {
+			http.Error(w, "LLM error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		outdoorCaptions = append(outdoorCaptions, caption)
+	}
+
+	// =====================
 	// 玄関の画像処理
 	// =====================
 	for _, fileHeader := range entranceFiles {
@@ -186,6 +223,154 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		hallwayCaptions = append(hallwayCaptions, caption)
+	}
+
+	// =====================
+	// 寝室の画像処理
+	// =====================
+	for _, fileHeader := range r.MultipartForm.File["bedroom_images"] {
+		src, err := fileHeader.Open()
+		if err != nil {
+			http.Error(w, "file open error", http.StatusInternalServerError)
+			return
+		}
+		filename := time.Now().Format("20060102150405") + "_" + fileHeader.Filename
+		savePath := filepath.Join(uploadDir, filename)
+		dst, err := os.Create(savePath)
+		if err != nil {
+			src.Close()
+			http.Error(w, "file save error", http.StatusInternalServerError)
+			return
+		}
+		_, err = io.Copy(dst, src)
+		src.Close()
+		dst.Close()
+		if err != nil {
+			http.Error(w, "file copy error", http.StatusInternalServerError)
+			return
+		}
+		bedroomImages = append(bedroomImages, savePath)
+		text := ""
+		if v, ok := areaSummaries["寝室"]; ok {
+			text = v
+		}
+		caption, err := h.service.GenerateCaption(ctx, text)
+		if err != nil {
+			http.Error(w, "LLM error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		bedroomCaptions = append(bedroomCaptions, caption)
+	}
+
+	// =====================
+	// 居室の画像処理
+	// =====================
+	for _, fileHeader := range r.MultipartForm.File["living_images"] {
+		src, err := fileHeader.Open()
+		if err != nil {
+			http.Error(w, "file open error", http.StatusInternalServerError)
+			return
+		}
+		filename := time.Now().Format("20060102150405") + "_" + fileHeader.Filename
+		savePath := filepath.Join(uploadDir, filename)
+		dst, err := os.Create(savePath)
+		if err != nil {
+			src.Close()
+			http.Error(w, "file save error", http.StatusInternalServerError)
+			return
+		}
+		_, err = io.Copy(dst, src)
+		src.Close()
+		dst.Close()
+		if err != nil {
+			http.Error(w, "file copy error", http.StatusInternalServerError)
+			return
+		}
+		livingImages = append(livingImages, savePath)
+		text := ""
+		if v, ok := areaSummaries["居室"]; ok {
+			text = v
+		}
+		caption, err := h.service.GenerateCaption(ctx, text)
+		if err != nil {
+			http.Error(w, "LLM error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		livingCaptions = append(livingCaptions, caption)
+	}
+
+	// =====================
+	// トイレの画像処理
+	// =====================
+	for _, fileHeader := range r.MultipartForm.File["toilet_images"] {
+		src, err := fileHeader.Open()
+		if err != nil {
+			http.Error(w, "file open error", http.StatusInternalServerError)
+			return
+		}
+		filename := time.Now().Format("20060102150405") + "_" + fileHeader.Filename
+		savePath := filepath.Join(uploadDir, filename)
+		dst, err := os.Create(savePath)
+		if err != nil {
+			src.Close()
+			http.Error(w, "file save error", http.StatusInternalServerError)
+			return
+		}
+		_, err = io.Copy(dst, src)
+		src.Close()
+		dst.Close()
+		if err != nil {
+			http.Error(w, "file copy error", http.StatusInternalServerError)
+			return
+		}
+		toiletImages = append(toiletImages, savePath)
+		text := ""
+		if v, ok := areaSummaries["トイレ"]; ok {
+			text = v
+		}
+		caption, err := h.service.GenerateCaption(ctx, text)
+		if err != nil {
+			http.Error(w, "LLM error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		toiletCaptions = append(toiletCaptions, caption)
+	}
+
+	// =====================
+	// 浴室の画像処理
+	// =====================
+	for _, fileHeader := range r.MultipartForm.File["bathroom_images"] {
+		src, err := fileHeader.Open()
+		if err != nil {
+			http.Error(w, "file open error", http.StatusInternalServerError)
+			return
+		}
+		filename := time.Now().Format("20060102150405") + "_" + fileHeader.Filename
+		savePath := filepath.Join(uploadDir, filename)
+		dst, err := os.Create(savePath)
+		if err != nil {
+			src.Close()
+			http.Error(w, "file save error", http.StatusInternalServerError)
+			return
+		}
+		_, err = io.Copy(dst, src)
+		src.Close()
+		dst.Close()
+		if err != nil {
+			http.Error(w, "file copy error", http.StatusInternalServerError)
+			return
+		}
+		bathroomImages = append(bathroomImages, savePath)
+		text := ""
+		if v, ok := areaSummaries["浴室"]; ok {
+			text = v
+		}
+		caption, err := h.service.GenerateCaption(ctx, text)
+		if err != nil {
+			http.Error(w, "LLM error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		bathroomCaptions = append(bathroomCaptions, caption)
 	}
 
 	// =====================

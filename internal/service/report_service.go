@@ -178,8 +178,8 @@ func (s *ReportService) GeneratePDF(
 
 	pdf.SetY(30)
 	pdf.SetFont("NotoSans", "", 14)
-	// pdf.Cell(0, 10, "XX報告書")
-	pdf.Cell(0, 10, "テストユーザー様報告書")
+	// 中央揃えでタイトル出力
+	pdf.CellFormat(0, 10, "テストユーザー様報告書", "", 0, "C", false, 0, "")
 	pdf.Ln(15)
 	pdf.SetFont("NotoSans", "", 11)
 
@@ -201,8 +201,14 @@ func (s *ReportService) GeneratePDF(
 	}
 
 	for _, area := range areaList {
-		if len(area.Images) > 0 {
-			// エリア見出しを出力せず、スペースを詰めてテキスト部分を広くする
+		fmt.Printf("[DEBUG] area=%s, images=%v, len=%d\n", area.Name, area.Images, len(area.Images))
+		if len(area.Images) == 4 {
+			fmt.Println("[DEBUG] renderFourImagesOnePage called for area:", area.Name)
+			fmt.Println("[DEBUG] Images:", area.Images)
+			fmt.Println("[DEBUG] Captions:", area.Captions)
+			currentY = renderFourImagesOnePage(pdf, area.Images, area.Captions, leftMargin, rightMargin, bottomLimit)
+		} else if len(area.Images) > 0 {
+			// 4枚以外は従来通り
 			currentY = renderSection(pdf, area.Images, area.Captions, columnWidth, leftMargin, bottomLimit, currentY)
 		}
 		// areaCaptions（AI要約済みテキスト）は画像キャプションとしてのみ利用し、エリアsummaryとしては出力しない
@@ -344,4 +350,71 @@ func renderSection(pdf *gofpdf.Fpdf, imagePaths []string, captions []string,
 	}
 
 	return currentY
+}
+
+// 4枚の画像＋コメントを1ページに2×2でレイアウトする
+func renderFourImagesOnePage(pdf *gofpdf.Fpdf, imagePaths []string, captions []string, leftMargin, rightMargin, bottomLimit float64) float64 {
+	fmt.Println("[DEBUG] --- renderFourImagesOnePage START ---")
+	fmt.Println("[DEBUG] imagePaths:", imagePaths)
+	fmt.Println("[DEBUG] captions:", captions)
+	pdf.AddPage()
+	fmt.Println("[DEBUG] pdf.AddPage() called")
+	pageWidth := 210.0
+	contentWidth := pageWidth - leftMargin - rightMargin
+	colWidth := contentWidth/2 - 5
+	rowHeight := (bottomLimit-40)/2 - 5
+	startY := 55.0 // ヘッダー・タイトル分の余白
+
+	for i := 0; i < 2; i++ {
+		for j := 0; j < 2; j++ {
+			idx := i*2 + j
+			if idx >= len(imagePaths) {
+				continue
+			}
+			x := leftMargin + float64(j)*(colWidth+10)
+			y := startY + float64(i)*(rowHeight+10)
+			fmt.Printf("[DEBUG] Drawing image idx=%d at x=%.2f y=%.2f\n", idx, x, y)
+
+			// 画像アスペクト比取得
+			ratio, err := getImageRatio(imagePaths[idx])
+			if err != nil || ratio <= 0 {
+				fmt.Printf("[DEBUG] getImageRatio error for %s: %v\n", imagePaths[idx], err)
+				ratio = 0.75 // デフォルト比率
+			}
+			imgW := colWidth
+			imgH := imgW * ratio
+			if imgH > rowHeight-20 {
+				imgH = rowHeight - 20
+				imgW = imgH / ratio
+			}
+			fmt.Printf("[DEBUG] imgW=%.2f imgH=%.2f\n", imgW, imgH)
+
+			// 画像描画
+			pdf.ImageOptions(
+				imagePaths[idx],
+				x,
+				y,
+				imgW,
+				imgH,
+				false,
+				gofpdf.ImageOptions{ImageType: "", ReadDpi: true},
+				0,
+				"",
+			)
+
+			// キャプション描画
+			captionText := strings.TrimSpace(strings.TrimPrefix(captions[idx], "# 写真状況説明文"))
+			pdf.SetFont("NotoSans", "", 12)
+			lines := wrapText(captionText, 18)
+			lineHeight := 6.0
+			textY := y + imgH + 3
+			for lineIdx, line := range lines {
+				pdf.SetXY(x, textY+float64(lineIdx)*lineHeight)
+				pdf.CellFormat(colWidth, lineHeight, line, "", 0, "L", false, 0, "")
+				fmt.Printf("[DEBUG] Caption line %d: %s\n", lineIdx, line)
+			}
+		}
+	}
+	fmt.Println("[DEBUG] --- renderFourImagesOnePage END ---")
+	return startY + 2*(rowHeight+10)
 }
