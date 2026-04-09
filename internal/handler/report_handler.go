@@ -14,6 +14,11 @@ type ReportService interface {
 	GeneratePDF(ctx context.Context,
 		entranceImages []string, entranceCaptions []string,
 		hallwayImages []string, hallwayCaptions []string,
+		outdoorImages []string, outdoorCaptions []string,
+		bedroomImages []string, bedroomCaptions []string,
+		livingImages []string, livingCaptions []string,
+		toiletImages []string, toiletCaptions []string,
+		bathroomImages []string, bathroomCaptions []string,
 		summary string) ([]byte, error)
 }
 
@@ -26,6 +31,8 @@ func NewReportHandler(s ReportService) *ReportHandler {
 }
 
 func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
+	// ...既存の変数宣言・初期化・フォーム値取得の後に移動...
+
 	ctx := r.Context()
 
 	// 最大20MB
@@ -35,9 +42,7 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entranceTexts := r.MultipartForm.Value["entrance_texts"]
 	entranceFiles := r.MultipartForm.File["entrance_images"]
-	hallwayTexts := r.MultipartForm.Value["hallway_texts"]
 	hallwayFiles := r.MultipartForm.File["hallway_images"]
 
 	// 総評(summary)を取得
@@ -59,20 +64,20 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if len(entranceFiles) == 0 && len(hallwayFiles) == 0 {
-		http.Error(w, "玄関または廊下の画像が必要です", http.StatusBadRequest)
-		return
-	}
+	// if len(entranceFiles) == 0 && len(hallwayFiles) == 0 {
+	// 	http.Error(w, "玄関または廊下の画像が必要です", http.StatusBadRequest)
+	// 	return
+	// }
 
-	if len(entranceTexts) != len(entranceFiles) {
-		http.Error(w, "玄関のテキストと画像の数が一致しません", http.StatusBadRequest)
-		return
-	}
+	// if len(entranceTexts) != len(entranceFiles) {
+	// 	http.Error(w, "玄関のテキストと画像の数が一致しません", http.StatusBadRequest)
+	// 	return
+	// }
 
-	if len(hallwayTexts) != len(hallwayFiles) {
-		http.Error(w, "廊下のテキストと画像の数が一致しません", http.StatusBadRequest)
-		return
-	}
+	// if len(hallwayTexts) != len(hallwayFiles) {
+	// 	http.Error(w, "廊下のテキストと画像の数が一致しません", http.StatusBadRequest)
+	// 	return
+	// }
 
 	// アップロード保存先
 	uploadDir := "./uploads"
@@ -82,6 +87,16 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	var entranceCaptions []string
 	var hallwayImages []string
 	var hallwayCaptions []string
+	var outdoorImages []string
+	var outdoorCaptions []string
+	var bedroomImages []string
+	var bedroomCaptions []string
+	var livingImages []string
+	var livingCaptions []string
+	var toiletImages []string
+	var toiletCaptions []string
+	var bathroomImages []string
+	var bathroomCaptions []string
 
 	// =====================
 	// 玄関の画像処理
@@ -176,7 +191,17 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	// =====================
 	// ③ PDF生成
 	// =====================
-	pdfBytes, err := h.service.GeneratePDF(ctx, entranceImages, entranceCaptions, hallwayImages, hallwayCaptions, summary)
+	pdfBytes, err := h.service.GeneratePDF(
+		ctx,
+		entranceImages, entranceCaptions,
+		hallwayImages, hallwayCaptions,
+		outdoorImages, outdoorCaptions,
+		bedroomImages, bedroomCaptions,
+		livingImages, livingCaptions,
+		toiletImages, toiletCaptions,
+		bathroomImages, bathroomCaptions,
+		summary,
+	)
 	if err != nil {
 		http.Error(w, "PDF生成失敗: "+err.Error(), http.StatusInternalServerError)
 		return

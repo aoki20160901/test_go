@@ -89,6 +89,16 @@ func (s *ReportService) GeneratePDF(
 	entranceCaptions []string,
 	hallwayImages []string,
 	hallwayCaptions []string,
+	outdoorImages []string,
+	outdoorCaptions []string,
+	bedroomImages []string,
+	bedroomCaptions []string,
+	livingImages []string,
+	livingCaptions []string,
+	toiletImages []string,
+	toiletCaptions []string,
+	bathroomImages []string,
+	bathroomCaptions []string,
 	summary string,
 ) ([]byte, error) {
 	if len(entranceImages) != len(entranceCaptions) {
@@ -96,6 +106,21 @@ func (s *ReportService) GeneratePDF(
 	}
 	if len(hallwayImages) != len(hallwayCaptions) {
 		return nil, fmt.Errorf("廊下のimageとcaptionの数が一致しません")
+	}
+	if len(outdoorImages) != len(outdoorCaptions) {
+		return nil, fmt.Errorf("屋外のimageとcaptionの数が一致しません")
+	}
+	if len(bedroomImages) != len(bedroomCaptions) {
+		return nil, fmt.Errorf("寝室のimageとcaptionの数が一致しません")
+	}
+	if len(livingImages) != len(livingCaptions) {
+		return nil, fmt.Errorf("居室のimageとcaptionの数が一致しません")
+	}
+	if len(toiletImages) != len(toiletCaptions) {
+		return nil, fmt.Errorf("トイレのimageとcaptionの数が一致しません")
+	}
+	if len(bathroomImages) != len(bathroomCaptions) {
+		return nil, fmt.Errorf("浴室のimageとcaptionの数が一致しません")
 	}
 
 	// ステップ2: summaryをエリアごとに分割
@@ -166,16 +191,13 @@ func (s *ReportService) GeneratePDF(
 		Images   []string
 		Captions []string
 	}{
-		{"屋外", nil, nil},
+		{"屋外", outdoorImages, outdoorCaptions},
 		{"玄関", entranceImages, entranceCaptions},
 		{"廊下", hallwayImages, hallwayCaptions},
-		{"階段", nil, nil},
-		{"寝室", nil, nil},
-		{"居室", nil, nil},
-		{"台所", nil, nil},
-		{"トイレ", nil, nil},
-		{"浴室", nil, nil},
-		{"脱衣所", nil, nil},
+		{"寝室", bedroomImages, bedroomCaptions},
+		{"居室", livingImages, livingCaptions},
+		{"トイレ", toiletImages, toiletCaptions},
+		{"浴室", bathroomImages, bathroomCaptions},
 	}
 
 	for _, area := range areaList {
