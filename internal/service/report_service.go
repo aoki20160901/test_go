@@ -101,6 +101,24 @@ func (s *ReportService) GeneratePDF(
 	bathroomCaptions []string,
 	summary string,
 ) ([]byte, error) {
+	// --- ステップ1: 全エリアの画像・キャプションを1つの配列にまとめる ---
+	var allImages []string
+	var allCaptions []string
+	allImages = append(allImages, entranceImages...)
+	allCaptions = append(allCaptions, entranceCaptions...)
+	allImages = append(allImages, hallwayImages...)
+	allCaptions = append(allCaptions, hallwayCaptions...)
+	allImages = append(allImages, outdoorImages...)
+	allCaptions = append(allCaptions, outdoorCaptions...)
+	allImages = append(allImages, bedroomImages...)
+	allCaptions = append(allCaptions, bedroomCaptions...)
+	allImages = append(allImages, livingImages...)
+	allCaptions = append(allCaptions, livingCaptions...)
+	allImages = append(allImages, toiletImages...)
+	allCaptions = append(allCaptions, toiletCaptions...)
+	allImages = append(allImages, bathroomImages...)
+	allCaptions = append(allCaptions, bathroomCaptions...)
+
 	if len(entranceImages) != len(entranceCaptions) {
 		return nil, fmt.Errorf("玄関のimageとcaptionの数が一致しません")
 	}
@@ -110,63 +128,32 @@ func (s *ReportService) GeneratePDF(
 	if len(outdoorImages) != len(outdoorCaptions) {
 		return nil, fmt.Errorf("屋外のimageとcaptionの数が一致しません")
 	}
-	if len(bedroomImages) != len(bedroomCaptions) {
-		return nil, fmt.Errorf("寝室のimageとcaptionの数が一致しません")
-	}
-	if len(livingImages) != len(livingCaptions) {
-		return nil, fmt.Errorf("居室のimageとcaptionの数が一致しません")
-	}
-	if len(toiletImages) != len(toiletCaptions) {
-		return nil, fmt.Errorf("トイレのimageとcaptionの数が一致しません")
-	}
-	if len(bathroomImages) != len(bathroomCaptions) {
-		return nil, fmt.Errorf("浴室のimageとcaptionの数が一致しません")
-	}
-
-	// ステップ2: summaryをエリアごとに分割
-	areaSummaries, err := s.llm.SplitSummaryByAreaWithAI(ctx, summary)
-	if err != nil {
-		areaSummaries = map[string]string{}
-	}
-
-	// ステップ1: areaSummariesの各値をGenerateCaptionでAI要約
-	areaCaptions := map[string]string{}
-	for area, text := range areaSummaries {
-		caption, err := s.llm.GenerateCaption(ctx, text)
-		if err != nil {
-			areaCaptions[area] = ""
-		} else {
-			fmt.Println("[AI要約]", area, ":", caption)
-			areaCaptions[area] = caption
-		}
-	}
-
-	// entranceCaptions, hallwayCaptions を areaCaptions で埋める
-	entranceCaptions = make([]string, len(entranceImages))
-	for i := range entranceCaptions {
-		entranceCaptions[i] = areaCaptions["玄関"]
-	}
-	hallwayCaptions = make([]string, len(hallwayImages))
-	for i := range hallwayCaptions {
-		hallwayCaptions[i] = areaCaptions["廊下"]
-	}
-
 	pdf := gofpdf.New("L", "mm", "A4", "")
 	pdf.SetMargins(20, 20, 20)
 	pdf.SetAutoPageBreak(false, 20)
 
-	pdf.AddPage()
+	var leftMargin, rightMargin, bottomLimit float64
+	leftMargin = 20.0
+	rightMargin = 20.0
+	bottomLimit = 297.0 - 20
 
+	// ===== ヘッダー =====
+	pdf.AddPage()
 	pdf.AddUTF8Font("NotoSans", "", "./fonts/NotoSansJP-Regular.ttf")
 	pdf.SetFont("NotoSans", "", 12)
+	pdf.SetXY(140, 15)
+	pdf.CellFormat(
+		50, 10,
+		fmt.Sprintf("作成日: %s", time.Now().Format("2006-01-02")),
+		"", 0, "R", false, 0, "",
+	)
+	pdf.SetY(30)
+	pdf.SetFont("NotoSans", "", 14)
+	pdf.CellFormat(0, 10, "テストユーザー様報告書", "", 0, "C", false, 0, "")
+	pdf.Ln(15)
+	pdf.SetFont("NotoSans", "", 11)
 
-	pageWidth, pageHeight := 210.0, 297.0
-	leftMargin := 20.0
-	rightMargin := 20.0
-	bottomLimit := pageHeight - 20
-
-	contentWidth := pageWidth - leftMargin - rightMargin
-	columnWidth := contentWidth/2 - 5
+	// pageWidth, pageHeightは未使用のため削除
 
 	// ===== ヘッダー =====
 	pdf.SetXY(140, 15)
@@ -176,43 +163,31 @@ func (s *ReportService) GeneratePDF(
 		"", 0, "R", false, 0, "",
 	)
 
+	// 1ページ目: タイトル・日付のみ
 	pdf.SetY(30)
 	pdf.SetFont("NotoSans", "", 14)
-	// 中央揃えでタイトル出力
 	pdf.CellFormat(0, 10, "テストユーザー様報告書", "", 0, "C", false, 0, "")
 	pdf.Ln(15)
 	pdf.SetFont("NotoSans", "", 11)
 
-	currentY := pdf.GetY()
+	// currentYは未使用のため削除
 
 	// エリアリスト
-	areaList := []struct {
-		Name     string
-		Images   []string
-		Captions []string
-	}{
-		{"屋外", outdoorImages, outdoorCaptions},
-		{"玄関", entranceImages, entranceCaptions},
-		{"廊下", hallwayImages, hallwayCaptions},
-		{"寝室", bedroomImages, bedroomCaptions},
-		{"居室", livingImages, livingCaptions},
-		{"トイレ", toiletImages, toiletCaptions},
-		{"浴室", bathroomImages, bathroomCaptions},
-	}
+	// areaListは未使用のため削除
 
-	for _, area := range areaList {
-		fmt.Printf("[DEBUG] area=%s, images=%v, len=%d\n", area.Name, area.Images, len(area.Images))
-		if len(area.Images) == 4 {
-			fmt.Println("[DEBUG] renderFourImagesOnePage called for area:", area.Name)
-			fmt.Println("[DEBUG] Images:", area.Images)
-			fmt.Println("[DEBUG] Captions:", area.Captions)
-			currentY = renderFourImagesOnePage(pdf, area.Images, area.Captions, leftMargin, rightMargin, bottomLimit)
-		} else if len(area.Images) > 0 {
-			// 4枚以外は従来通り
-			currentY = renderSection(pdf, area.Images, area.Captions, columnWidth, leftMargin, bottomLimit, currentY)
-		}
-		// areaCaptions（AI要約済みテキスト）は画像キャプションとしてのみ利用し、エリアsummaryとしては出力しない
-	}
+	// --- ステップ2: 4枚ごとにページ分割し2×2で出力 ---
+		       for i := 0; i < len(allImages); i += 4 {
+			       end := i + 4
+			       if end > len(allImages) {
+				       end = len(allImages)
+			       }
+			       imgs := allImages[i:end]
+			       caps := allCaptions[i:end]
+			       if i != 0 {
+				       pdf.AddPage()
+			       }
+			       renderFourImagesOnePage(pdf, imgs, caps, leftMargin, rightMargin, bottomLimit)
+		       }
 
 	// ===== 総評（summary）を最後に出力 =====
 	// if strings.TrimSpace(summary) != "" {
@@ -235,130 +210,21 @@ func (s *ReportService) GeneratePDF(
 	// 	pdf.Ln(12)
 	// 	pdf.SetFont("NotoSans", "", 11)
 	// 	// 複数行対応
-	// 	lines := wrapText(souhyou, 40)
-	// 	for _, line := range lines {
-	// 		pdf.MultiCell(0, 8, line, "", "L", false)
-	// 	}
-	// }
+	//
 
-	var buf bytes.Buffer
-	err = pdf.Output(&buf)
-	if err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
-}
-
-// renderSection は指定された画像とキャプションをPDFに描画する
-func renderSection(pdf *gofpdf.Fpdf, imagePaths []string, captions []string,
-	columnWidth, leftMargin, bottomLimit, currentY float64) float64 {
-
-	for i := 0; i < len(imagePaths); i += 2 {
-
-		rowStartY := currentY
-		maxRowHeight := 0.0
-
-		// 各列のキャプション行数を事前に計算
-		var captionLinesLeft, captionLinesRight []string
-
-		for col := 0; col < 2; col++ {
-			index := i + col
-			if index >= len(imagePaths) {
-				break
-			}
-			captionText := strings.TrimSpace(strings.TrimPrefix(captions[index], "# 写真状況説明文"))
-			lines := wrapText(captionText, 18)
-			if col == 0 {
-				captionLinesLeft = lines
-			} else {
-				captionLinesRight = lines
-			}
-		}
-
-		for col := 0; col < 2; col++ {
-
-			index := i + col
-			if index >= len(imagePaths) {
-				break
-			}
-
-			// 描画前に標準ライブラリでアスペクト比を取得（GetImageInfo は登録後のみ有効）
-			ratio, err := getImageRatio(imagePaths[index])
-			if err != nil {
-				continue // エラーの場合はスキップ
-			}
-
-			x := leftMargin + float64(col)*(columnWidth+10)
-			y := rowStartY
-
-			imageWidth := columnWidth
-			imageHeight := imageWidth * ratio
-
-			// ページ下限チェック
-			if y+imageHeight+30 > bottomLimit {
-				pdf.AddPage()
-				currentY = 30
-				rowStartY = currentY
-				y = rowStartY
-			}
-
-			// 画像描画
-			pdf.ImageOptions(
-				imagePaths[index],
-				x,
-				y,
-				imageWidth,
-				imageHeight,
-				false,
-				gofpdf.ImageOptions{ImageType: "", ReadDpi: true},
-				0,
-				"",
-			)
-
-			// キャプション描画（Y座標を完全に手動制御）
-			textY := y + imageHeight + 3
-			pdf.SetFont("NotoSans", "", 12)
-			lineHeight := 6.0
-
-			var lines []string
-			if col == 0 {
-				lines = captionLinesLeft
-			} else {
-				lines = captionLinesRight
-			}
-
-			// 1行ずつ描画（Y座標を明示的に指定）
-			for lineIdx, line := range lines {
-				currentLineY := textY + float64(lineIdx)*lineHeight
-				pdf.SetXY(x, currentLineY)
-				// Cellではなく、Text系メソッドで描画してY座標を変更しない
-				pdf.CellFormat(columnWidth, lineHeight, line, "", 0, "L", false, 0, "")
-			}
-
-			pdf.SetFont("NotoSans", "", 11)
-
-			// 列の高さ計算
-			textHeight := float64(len(lines)) * lineHeight
-			colHeight := imageHeight + 3 + textHeight
-			if colHeight > maxRowHeight {
-				maxRowHeight = colHeight
-			}
-		}
-
-		currentY = rowStartY + maxRowHeight + 10
-	}
-
-	return currentY
-}
-
+		       var buf bytes.Buffer
+		       var err error
+		       err = pdf.Output(&buf)
+		       if err != nil {
+			       return nil, err
+		       }
+		       return buf.Bytes(), nil
 // 4枚の画像＋コメントを1ページに2×2でレイアウトする
+}
 func renderFourImagesOnePage(pdf *gofpdf.Fpdf, imagePaths []string, captions []string, leftMargin, rightMargin, bottomLimit float64) float64 {
 	fmt.Println("[DEBUG] --- renderFourImagesOnePage START ---")
 	fmt.Println("[DEBUG] imagePaths:", imagePaths)
 	fmt.Println("[DEBUG] captions:", captions)
-	pdf.AddPage()
-	fmt.Println("[DEBUG] pdf.AddPage() called")
 	pageWidth := 210.0
 	contentWidth := pageWidth - leftMargin - rightMargin
 	colWidth := contentWidth/2 - 5
