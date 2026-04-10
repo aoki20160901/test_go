@@ -155,14 +155,6 @@ func (s *ReportService) GeneratePDF(
 
 	// pageWidth, pageHeightは未使用のため削除
 
-	// ===== ヘッダー =====
-	pdf.SetXY(140, 15)
-	pdf.CellFormat(
-		50, 10,
-		fmt.Sprintf("作成日: %s", time.Now().Format("2006-01-02")),
-		"", 0, "R", false, 0, "",
-	)
-
 	// 1ページ目: タイトル・日付のみ
 	pdf.SetY(30)
 	pdf.SetFont("NotoSans", "", 14)
@@ -176,18 +168,18 @@ func (s *ReportService) GeneratePDF(
 	// areaListは未使用のため削除
 
 	// --- ステップ2: 4枚ごとにページ分割し2×2で出力 ---
-		       for i := 0; i < len(allImages); i += 4 {
-			       end := i + 4
-			       if end > len(allImages) {
-				       end = len(allImages)
-			       }
-			       imgs := allImages[i:end]
-			       caps := allCaptions[i:end]
-			       if i != 0 {
-				       pdf.AddPage()
-			       }
-			       renderFourImagesOnePage(pdf, imgs, caps, leftMargin, rightMargin, bottomLimit)
-		       }
+	for i := 0; i < len(allImages); i += 4 {
+		end := i + 4
+		if end > len(allImages) {
+			end = len(allImages)
+		}
+		imgs := allImages[i:end]
+		caps := allCaptions[i:end]
+		if i != 0 {
+			pdf.AddPage()
+		}
+		renderFourImagesOnePage(pdf, imgs, caps, leftMargin, rightMargin, bottomLimit)
+	}
 
 	// ===== 総評（summary）を最後に出力 =====
 	// if strings.TrimSpace(summary) != "" {
@@ -212,24 +204,28 @@ func (s *ReportService) GeneratePDF(
 	// 	// 複数行対応
 	//
 
-		       var buf bytes.Buffer
-		       var err error
-		       err = pdf.Output(&buf)
-		       if err != nil {
-			       return nil, err
-		       }
-		       return buf.Bytes(), nil
-// 4枚の画像＋コメントを1ページに2×2でレイアウトする
+	var buf bytes.Buffer
+	var err error
+	err = pdf.Output(&buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+	// 4枚の画像＋コメントを1ページに2×2でレイアウトする
 }
 func renderFourImagesOnePage(pdf *gofpdf.Fpdf, imagePaths []string, captions []string, leftMargin, rightMargin, bottomLimit float64) float64 {
 	fmt.Println("[DEBUG] --- renderFourImagesOnePage START ---")
 	fmt.Println("[DEBUG] imagePaths:", imagePaths)
 	fmt.Println("[DEBUG] captions:", captions)
-	pageWidth := 210.0
-	contentWidth := pageWidth - leftMargin - rightMargin
-	colWidth := contentWidth/2 - 5
-	rowHeight := (bottomLimit-40)/2 - 5
+	// A4横: 297mm, 写真間余白10mm, 画像枠20%縮小
+	pageWidth := 297.0
+	gap := 10.0
+	colWidth := ((pageWidth - 20.0 - 20.0 - gap) / 2) * 0.7
+	rowHeight := (((bottomLimit-40)/2 - 5) * 0.7) * 0.8
 	startY := 55.0 // ヘッダー・タイトル分の余白
+	// 画像2枚＋gap分の幅を中央に揃えるための左端基準を計算
+	totalContentWidth := colWidth*2 + gap
+	leftX := (pageWidth - totalContentWidth) / 2
 
 	for i := 0; i < 2; i++ {
 		for j := 0; j < 2; j++ {
@@ -237,10 +233,6 @@ func renderFourImagesOnePage(pdf *gofpdf.Fpdf, imagePaths []string, captions []s
 			if idx >= len(imagePaths) {
 				continue
 			}
-			x := leftMargin + float64(j)*(colWidth+10)
-			y := startY + float64(i)*(rowHeight+10)
-			fmt.Printf("[DEBUG] Drawing image idx=%d at x=%.2f y=%.2f\n", idx, x, y)
-
 			// 画像アスペクト比取得
 			ratio, err := getImageRatio(imagePaths[idx])
 			if err != nil || ratio <= 0 {
@@ -253,7 +245,10 @@ func renderFourImagesOnePage(pdf *gofpdf.Fpdf, imagePaths []string, captions []s
 				imgH = rowHeight - 20
 				imgW = imgH / ratio
 			}
-			fmt.Printf("[DEBUG] imgW=%.2f imgH=%.2f\n", imgW, imgH)
+			// x座標をページ中央基準で中央揃えに調整
+			x := leftX + float64(j)*(colWidth+gap) + (colWidth-imgW)/2
+			y := startY + float64(i)*(rowHeight+10)
+			fmt.Printf("[DEBUG] Drawing image idx=%d at x=%.2f y=%.2f\n", idx, x, y)
 
 			// 画像描画
 			pdf.ImageOptions(
